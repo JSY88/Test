@@ -1430,7 +1430,7 @@ function generateStimulusSequence() {
     while (attempts < 10) {
         const { patternCounts } = analyzePatterns(sequence);
         console.log(`generateStimulusSequence() - 패턴 검사 (${attempts + 1}/10):`, patternCounts);
-        if (patternCounts["A-B-A"] <= 3 && patternCounts["A-B-A-B"] <= 1) {
+        if (patternCounts["A-B-A"] <= 2 && patternCounts["A-B-A-B"] <= 1) {
             console.log("generateStimulusSequence() - 패턴 검사 통과: 시도 횟수", attempts);
             break;
         }
