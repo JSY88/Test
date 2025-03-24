@@ -1340,7 +1340,7 @@ function generateStimulusSequence() {
     console.log("generateStimulusSequence() - 시퀀스 생성 시작: 패턴 방지 및 구간 분할 적용");
     const sequence = [];
     const recentLimit = gameState.nBackLevel * 2;
-    const targetGoals = { scene: 6, location: 6, sound: 3, color: 6 };
+    const targetGoals = { scene: 4, location: 4, sound: 2, color: 4 };
     const targetPositions = {};
     const targetTypes = ['scene', 'location', 'sound', 'color'];
     const minInterval = gameState.nBackLevel + 1; // nBackLevel에 따라 동적 간격 설정
