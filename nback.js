@@ -1272,10 +1272,10 @@ function startBlock() {
     gameState.presentedStimulusHistory = [];
 
     // 동적 타겟 목표 설정
-    setTargetGoal("scene", Math.ceil(6 * (gameState.nBackLevel / 2)));
-    setTargetGoal("location", Math.ceil(6 * (gameState.nBackLevel / 2)));
-    setTargetGoal("sound", Math.ceil(3 * (gameState.nBackLevel / 2)));
-    setTargetGoal("color", Math.ceil(6 * (gameState.nBackLevel / 2)));
+    setTargetGoal("scene", Math.ceil(3 * (gameState.nBackLevel / 2)));
+    setTargetGoal("location", Math.ceil(3 * (gameState.nBackLevel / 2)));
+    setTargetGoal("sound", Math.ceil(1 * (gameState.nBackLevel / 2)));
+    setTargetGoal("color", Math.ceil(3 * (gameState.nBackLevel / 2)));
 
     gameState.stimulusSequence = generateStimulusSequence();
     // 나머지 코드 생략
