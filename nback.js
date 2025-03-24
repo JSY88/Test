@@ -633,15 +633,6 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
     resetIndicators();
     const panel = panels[panelIndex];
 
-    // 간섭 로직 통합: introduceInterference() 호출
-    const interfered = introduceInterference(imageIndex, panelIndex, soundIndex, colorIndex);
-    imageIndex = interfered.imageIndex;
-    panelIndex = interfered.panelIndex;
-    soundIndex = interfered.soundIndex;
-    colorIndex = interfered.colorIndex;
-    // 강력한 디버깅 로그: 간섭 적용 후 값 확인
-    console.log("showStimulus() - After interference applied:", { imageIndex, panelIndex, soundIndex, colorIndex });
-
     // 미리 설정된 타겟 여부 사용
     if (gameState.currentStimulus >= gameState.nBackLevel) {
         gameState.currentIsSceneTarget = gameState.stimulusSequence[gameState.currentStimulus].isSceneTarget;
@@ -662,7 +653,7 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
         console.log("showStimulus() - Initial stimulus, no targets set");
     }
 
-    console.log("showStimulus() - Presenting stimulus:", { imageIndex, panelIndex, soundIndex, colorIndex });
+    console.log("showStimulus() - Presenting stimulus directly from sequence:", { imageIndex, panelIndex, soundIndex, colorIndex });
 
     // 자극 제시
     createStimulusImage(imageIndex, panel, colorIndex);
@@ -823,6 +814,7 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
         }, gameState.stimulusDuration);
     }
 }
+
 
 
 
@@ -1289,10 +1281,10 @@ function startBlock() {
     // 나머지 코드 생략
 
     // 타겟 목표 설정
-    //setTargetGoal("scene", 6);
-    //setTargetGoal("location", 6);
-    //setTargetGoal("sound", 3);
-    //setTargetGoal("color", 6);
+    //setTargetGoal("scene", 4);
+    //setTargetGoal("location", 4);
+    //setTargetGoal("sound", 2);
+    //setTargetGoal("color", 4);
 
     // 자극 시퀀스 생성
     gameState.stimulusSequence = generateStimulusSequence();
@@ -1343,257 +1335,264 @@ function startBlock() {
 
 
 
+
 function generateStimulusSequence() {
-    console.log("generateStimulusSequence() - Generating stimulus sequence with enhanced pattern prevention");
+    console.log("generateStimulusSequence() - 시퀀스 생성 시작: 패턴 방지 및 구간 분할 적용");
     const sequence = [];
     const recentLimit = gameState.nBackLevel * 2;
-    const patternCheckLength = Math.max(gameState.nBackLevel + 1, 4);
-    const maxAdjustments = 30;
+    const targetGoals = { scene: 6, location: 6, sound: 3, color: 6 };
+    const targetPositions = {};
+    const targetTypes = ['scene', 'location', 'sound', 'color'];
+    const minInterval = gameState.nBackLevel + 1; // nBackLevel에 따라 동적 간격 설정
+    const totalStimuli = gameState.stimuliPerBlock - gameState.nBackLevel;
+    const intervalCount = 5; // 5개 구간으로 분할
+    const stimuliPerInterval = Math.floor(totalStimuli / intervalCount);
+    const extraStimuli = totalStimuli % intervalCount;
 
-    gameState.targetCountGoals = { scene: 6, location: 6, sound: 3, color: 6 };
-    let sceneTargets = 0, locationTargets = 0, soundTargets = 0, colorTargets = 0;
-    let recentTargetTypes = [];
-    let patternAttempts = 0, patternPreventions = 0;
+    // 구간별 타겟 위치 선정
+    targetTypes.forEach(type => {
+        targetPositions[type] = [];
+        let remainingTargets = targetGoals[type];
+        for (let i = 0; i < intervalCount; i++) {
+            const intervalStimuli = stimuliPerInterval + (i < extraStimuli ? 1 : 0);
+            const intervalTargets = Math.floor(remainingTargets / (intervalCount - i));
+            remainingTargets -= intervalTargets;
+            const intervalPositions = selectTargetPositions(intervalStimuli, intervalTargets, minInterval);
+            targetPositions[type].push(...intervalPositions.map(pos => pos + i * stimuliPerInterval));
+            console.log(`generateStimulusSequence() - 구간 ${i + 1}/${intervalCount}, ${type} 타겟 위치:`, intervalPositions);
+        }
+    });
 
-    // 초기 자극 생성
+    // 초기 자극 (타겟 없음)
     for (let i = 0; i < gameState.nBackLevel; i++) {
         const imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices || [], imageTextures.length, recentLimit);
         const panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices || [], panels.length, recentLimit);
-        const soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices || [], gameState.soundSource === "soundFiles" ? gameState.soundFiles.length : gameState.pianoTones.length, recentLimit);
+        const soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices || [], gameState.pianoTones.length, recentLimit);
         const colorIndex = selectIndexAvoidingRecent(gameState.recentColorIndices || [], distinctColors.length, recentLimit);
-
-        updateRecentIndices("scene", imageIndex, recentLimit);
-        updateRecentIndices("location", panelIndex, recentLimit);
-        updateRecentIndices("sound", soundIndex, recentLimit);
-        updateRecentIndices("color", colorIndex, recentLimit);
 
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
             targetType: "initial",
             isSceneTarget: false, isLocationTarget: false, isSoundTarget: false, isColorTarget: false
         });
+        updateRecentIndices("scene", imageIndex, recentLimit);
+        updateRecentIndices("location", panelIndex, recentLimit);
+        updateRecentIndices("sound", soundIndex, recentLimit);
+        updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    const remainingStimuli = gameState.stimuliPerBlock - gameState.nBackLevel;
-    const targetPositions = {
-        scene: shuffleArray([...Array(remainingStimuli).keys()]).slice(0, Math.min(gameState.targetCountGoals.scene, remainingStimuli)),
-        location: shuffleArray([...Array(remainingStimuli).keys()]).slice(0, Math.min(gameState.targetCountGoals.location, remainingStimuli)),
-        sound: shuffleArray([...Array(remainingStimuli).keys()]).slice(0, Math.min(gameState.targetCountGoals.sound, remainingStimuli)),
-        color: shuffleArray([...Array(remainingStimuli).keys()]).slice(0, Math.min(gameState.targetCountGoals.color, remainingStimuli))
-    };
-    console.log("generateStimulusSequence() - Pre-assigned target positions:", JSON.stringify(targetPositions));
+    // 타겟 유형 할당 및 패턴 방지
+    const allTargets = [];
+    targetTypes.forEach(type => {
+        targetPositions[type].forEach(pos => allTargets.push({ pos, type }));
+    });
+    allTargets.sort((a, b) => a.pos - b.pos);
 
-    function detectPattern(recentArray, checkLength) {
-    if (recentArray.length < checkLength) return false;
-    const lastN = recentArray.slice(-checkLength);
-    
-    // A-A 패턴 감지 (2개 연속, non-target 제외)
-    if (checkLength >= 2 && lastN[checkLength - 2] === lastN[checkLength - 1] && lastN[checkLength - 1] !== "non-target") {
-        console.log(`detectPattern() - A-A pattern detected: ${lastN}`);
-        return true;
-    }
-    // 비타겟 자극 3개 이상 연속 감지 강화
-    if (checkLength >= 3 && lastN.slice(-3).every(type => type === "non-target")) {
-        console.log(`detectPattern() - Enhanced non-target streak detected (3+): ${lastN}`);
-        return true;
-    }
-    // 기존 패턴 감지 로직 유지
-    if (lastN[0] === lastN[checkLength - 1] && lastN[0] !== lastN[1]) {
-        console.log(`detectPattern() - A-B-A pattern detected: ${lastN}`);
-        return true;
-    }
-    if (checkLength >= 4 && lastN[0] === lastN[3] && lastN[1] !== lastN[2]) {
-        console.log(`detectPattern() - A-B-C-A pattern detected: ${lastN}`);
-        return true;
-    }
-    if (checkLength >= 4 && lastN[0] === lastN[2] && lastN[1] === lastN[3] && lastN[0] !== lastN[1]) {
-        console.log(`detectPattern() - A-B-A-B pattern detected: ${lastN}`);
-        return true;
-    }
-    if (checkLength >= 5 && lastN[0] === lastN[4] && lastN[1] === lastN[3] && lastN[0] !== lastN[2]) {
-        console.log(`detectPattern() - A-B-A-C-A pattern detected: ${lastN}`);
-        return true;
-    }
-    if (checkLength >= 3 && lastN[checkLength - 3] === lastN[checkLength - 2] && lastN[checkLength - 2] === lastN[checkLength - 1] && lastN[checkLength - 1] !== "non-target") {
-        console.log(`detectPattern() - A-A-A pattern detected: ${lastN}`);
-        return true;
-    }
-    return false;
-}
-
-    const targetTypes = ["scene", "location", "sound", "color"];
-    for (let i = 0; i < remainingStimuli; i++) {
-    const absoluteIndex = i + gameState.nBackLevel;
-    let isSceneTarget = targetPositions.scene.includes(i) && sceneTargets < gameState.targetCountGoals.scene;
-    let isLocationTarget = targetPositions.location.includes(i) && locationTargets < gameState.targetCountGoals.location;
-    let isSoundTarget = targetPositions.sound.includes(i) && soundTargets < gameState.targetCountGoals.sound;
-    let isColorTarget = targetPositions.color.includes(i) && colorTargets < gameState.targetCountGoals.color;
-    let targetType = "non-target";
-    let adjustments = 0;
-
-    const nBackIndex = absoluteIndex - gameState.nBackLevel;
-    if (nBackIndex < 0 || nBackIndex >= sequence.length) {
-        console.error("generateStimulusSequence() - Invalid nBackIndex:", nBackIndex, "for absoluteIndex:", absoluteIndex);
-        isSceneTarget = isLocationTarget = isSoundTarget = isColorTarget = false;
-    }
-
-    let patternDetected = true;
-    let imageIndex, panelIndex, soundIndex, colorIndex; // 변수 선언을 루프 밖으로 이동
-    while (patternDetected && adjustments < maxAdjustments) {
-        let currentTargetTypes = [];
-        if (isSceneTarget) currentTargetTypes.push("scene");
-        if (isLocationTarget) currentTargetTypes.push("location");
-        if (isSoundTarget) currentTargetTypes.push("sound");
-        if (isColorTarget) currentTargetTypes.push("color");
-
-        let tempRecent = [...recentTargetTypes];
-        if (currentTargetTypes.length > 0) tempRecent.push(currentTargetTypes.join(','));
-        else tempRecent.push("non-target");
-
-        patternDetected = detectPattern(tempRecent, patternCheckLength);
-        patternAttempts++;
-        if (patternDetected) {
-            console.log(`generateStimulusSequence() - Pattern detected at index ${absoluteIndex}, attempting to prevent`);
-            const lastFour = recentTargetTypes.slice(-4);
-            const availableTypes = targetTypes.filter(type => !lastFour.includes(type) && eval(`${type}Targets`) < gameState.targetCountGoals[type]);
-            
-            // 비타겟 3개 연속 방지: 강제로 타겟 삽입
-            if (recentTargetTypes.slice(-3).every(type => type === "non-target") && availableTypes.length > 0) {
-                const forceTargetType = shuffleArray(availableTypes)[0];
-                isSceneTarget = forceTargetType === "scene";
-                isLocationTarget = forceTargetType === "location";
-                isSoundTarget = forceTargetType === "sound";
-                isColorTarget = forceTargetType === "color";
-                console.log(`generateStimulusSequence() - Forced target ${forceTargetType} at index ${absoluteIndex} to break non-target streak`);
-                patternPreventions++;
-            } 
-            // 사용 가능한 타겟 타입이 있을 경우 조정
-            else if (availableTypes.length > 0) {
-                const newType = shuffleArray(availableTypes)[0];
-                isSceneTarget = newType === "scene";
-                isLocationTarget = newType === "location";
-                isSoundTarget = newType === "sound";
-                isColorTarget = newType === "color";
-                console.log(`generateStimulusSequence() - Adjusted to ${newType} at index ${absoluteIndex} based on last four: ${lastFour}`);
-                patternPreventions++;
-            } 
-            // 타겟 삽입 불가 시 속성 변경
-            else {
-                console.log(`generateStimulusSequence() - No available targets, adjusting attributes at index ${absoluteIndex}`);
-                imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-                panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-                soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.soundSource === "soundFiles" ? gameState.soundFiles.length : gameState.pianoTones.length, recentLimit);
-                colorIndex = selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
-                patternPreventions++;
-            }
-            // 조정 후 패턴 재확인
-            tempRecent = [...recentTargetTypes];
-            currentTargetTypes = [];
-            if (isSceneTarget) currentTargetTypes.push("scene");
-            if (isLocationTarget) currentTargetTypes.push("location");
-            if (isSoundTarget) currentTargetTypes.push("sound");
-            if (isColorTarget) currentTargetTypes.push("color");
-            tempRecent.push(currentTargetTypes.length > 0 ? currentTargetTypes.join(',') : "non-target");
-            patternDetected = detectPattern(tempRecent, patternCheckLength);
+    // 동일 유형 연속 방지
+    for (let i = 1; i < allTargets.length; i++) {
+        if (allTargets[i].type === allTargets[i - 1].type && allTargets[i].pos - allTargets[i - 1].pos < minInterval) {
+            shuffleArray(targetTypes);
+            allTargets[i].type = targetTypes.find(t => t !== allTargets[i - 1].type);
+            console.log(`generateStimulusSequence() - 동일 유형 연속 방지: 위치 ${allTargets[i].pos}에서 ${allTargets[i].type}으로 변경`);
         }
-        adjustments++;
     }
 
-    if (adjustments >= maxAdjustments) {
-        console.warn(`generateStimulusSequence() - Max adjustments reached at index ${absoluteIndex}, forcing non-target. Recent: ${recentTargetTypes.slice(-5)}`);
-        isSceneTarget = isLocationTarget = isSoundTarget = isColorTarget = false;
-        targetType = "non-target";
-        imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-        panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-        soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.soundSource === "soundFiles" ? gameState.soundFiles.length : gameState.pianoTones.length, recentLimit);
-        colorIndex = selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
-    }
+    // 시퀀스 생성
+    for (let i = 0; i < totalStimuli; i++) {
+        const absoluteIndex = i + gameState.nBackLevel;
+        const nBackIndex = absoluteIndex - gameState.nBackLevel;
+        const targetsAtPos = allTargets.filter(t => t.pos === i);
 
-    // 이후 자극 생성 로직은 기존과 동일
-    if (isSceneTarget && nBackIndex >= 0) {
-        imageIndex = sequence[nBackIndex].imageIndex;
-        sceneTargets++;
-        targetType = "scene";
-    } else {
-        imageIndex = imageIndex || selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-    }
-        if (isLocationTarget && nBackIndex >= 0) {
-            panelIndex = sequence[nBackIndex].panelIndex;
-            locationTargets++;
-            targetType = targetType === "non-target" ? "location" : "multiple";
-            recentTargetTypes.push("location");
-        } else {
-            panelIndex = panelIndex || selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-        }
-        if (isSoundTarget && nBackIndex >= 0) {
-            soundIndex = sequence[nBackIndex].soundIndex;
-            soundTargets++;
-            targetType = targetType === "non-target" ? "sound" : "multiple";
-            recentTargetTypes.push("sound");
-        } else {
-            soundIndex = soundIndex || selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.soundSource === "soundFiles" ? gameState.soundFiles.length : gameState.pianoTones.length, recentLimit);
-        }
-        if (isColorTarget && nBackIndex >= 0) {
-            colorIndex = sequence[nBackIndex].colorIndex;
-            colorTargets++;
-            targetType = targetType === "non-target" ? "color" : "multiple";
-            recentTargetTypes.push("color");
-        } else {
-            colorIndex = colorIndex || selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
-        }
+        let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
+        let isLocationTarget = targetsAtPos.some(t => t.type === 'location');
+        let isSoundTarget = targetsAtPos.some(t => t.type === 'sound');
+        let isColorTarget = targetsAtPos.some(t => t.type === 'color');
+        let targetType = targetsAtPos.length ? targetsAtPos[0].type : "non-target";
 
-        if (targetType === "non-target") recentTargetTypes.push("non-target");
+        const imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
+        const panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
+        const soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
+        const colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
 
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
-            targetType,
-            isSceneTarget, isLocationTarget, isSoundTarget, isColorTarget
+            targetType, isSceneTarget, isLocationTarget, isSoundTarget, isColorTarget
         });
 
         updateRecentIndices("scene", imageIndex, recentLimit);
         updateRecentIndices("location", panelIndex, recentLimit);
         updateRecentIndices("sound", soundIndex, recentLimit);
         updateRecentIndices("color", colorIndex, recentLimit);
-
-        console.log(`generateStimulusSequence() - Stimulus ${absoluteIndex}:`, {
-            targetType,
-            scene: { index: imageIndex, isTarget: isSceneTarget },
-            location: { index: panelIndex, isTarget: isLocationTarget },
-            sound: { index: soundIndex, isTarget: isSoundTarget },
-            color: { index: colorIndex, isTarget: isColorTarget },
-            recentTargetTypes: recentTargetTypes.slice(-5)
-        });
     }
 
-    gameState.sceneTargets = sequence.filter(s => s.isSceneTarget).length;
-    gameState.locationTargets = sequence.filter(s => s.isLocationTarget).length;
-    gameState.soundTargets = sequence.filter(s => s.isSoundTarget).length;
-    gameState.colorTargets = sequence.filter(s => s.isColorTarget).length;
-
-    let patternOccurrences = 0;
-    const targetTypeSequence = sequence.map(s => s.targetType);
-    for (let i = patternCheckLength - 1; i < sequence.length; i++) {
-        const lastNTargets = targetTypeSequence.slice(i - patternCheckLength + 1, i + 1);
-        if (detectPattern(lastNTargets, patternCheckLength)) {
-            patternOccurrences++;
+    // 패턴 분석 및 조정
+    let attempts = 0;
+    while (attempts < 10) {
+        const { patternCounts } = analyzePatterns(sequence);
+        console.log(`generateStimulusSequence() - 패턴 검사 (${attempts + 1}/10):`, patternCounts);
+        if (patternCounts["A-B-A"] <= 3 && patternCounts["A-B-A-B"] <= 1) {
+            console.log("generateStimulusSequence() - 패턴 검사 통과: 시도 횟수", attempts);
+            break;
         }
+        // 조정 로직: 패턴이 있는 위치의 타겟을 재배치
+        const problematicPositions = findProblematicPositions(sequence);
+        adjustTargetPositions(sequence, problematicPositions);
+        attempts++;
     }
-    console.log("generateStimulusSequence() - Final target type sequence:", targetTypeSequence);
-    console.log("generateStimulusSequence() - Pattern detection attempts:", patternAttempts);
-    console.log("generateStimulusSequence() - Pattern preventions succeeded:", patternPreventions);
-    console.log("generateStimulusSequence() - Total pattern occurrences:", patternOccurrences, "out of", sequence.length - patternCheckLength + 1, "checks");
-    console.log("generateStimulusSequence() - Pattern frequency:", ((patternOccurrences / (sequence.length - patternCheckLength + 1)) * 100).toFixed(2) + "%");
-    console.log("generateStimulusSequence() - Final target counts:", {
-        scene: gameState.sceneTargets,
-        location: gameState.locationTargets,
-        sound: gameState.soundTargets,
-        color: gameState.colorTargets
-    });
+    if (attempts >= 10) {
+        console.warn("generateStimulusSequence() - 10번 시도 후 패턴 조정 실패");
+    }
 
+    console.log("generateStimulusSequence() - 최종 시퀀스 생성 완료: 길이", sequence.length);
     return sequence;
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 타겟 위치를 선정하는 함수 (패턴 방지 및 안정성 강화)
+function selectTargetPositions(intervalStimuli, targetCount, minInterval) {
+    console.log(`selectTargetPositions() - 타겟 위치 선정 시작: 구간 자극 수=${intervalStimuli}, 타겟 수=${targetCount}, 최소 간격=${minInterval}`);
+    const positions = [];
+    let attempts = 0;
+    const maxAttempts = 200;
+
+    while (attempts < maxAttempts) {
+        const availablePositions = Array.from({ length: intervalStimuli }, (_, i) => i);
+        shuffleArray(availablePositions);
+
+        while (positions.length < targetCount && availablePositions.length > 0) {
+            const pos = availablePositions.pop();
+            if (positions.every(p => Math.abs(p - pos) >= minInterval)) {
+                positions.push(pos);
+            }
+        }
+
+        if (positions.length < targetCount) {
+            console.warn(`selectTargetPositions() - 모든 타겟 배치 불가: 배치된 타겟 ${positions.length}/${targetCount}`);
+            return positions.sort((a, b) => a - b);
+        }
+
+        positions.sort((a, b) => a - b);
+        const diffs = positions.slice(1).map((p, i) => p - positions[i]);
+        const isEqualInterval = diffs.length > 1 && diffs.every(d => d === diffs[0]);
+        const isConsecutive = diffs.some(d => d === 1);
+        const isCyclic = checkCyclicPattern(positions);
+
+        console.log(`selectTargetPositions() - 시도 ${attempts + 1}: 위치=${positions}, 간격=${diffs}`);
+
+        if (!isConsecutive && !isCyclic && (!isEqualInterval || diffs.length <= 2)) {
+            console.log(`selectTargetPositions() - 성공: 위치=${positions}, 시도 횟수=${attempts}`);
+            return positions;
+        }
+
+        positions.length = 0; // 실패 시 초기화
+        attempts++;
+    }
+
+    console.error(`selectTargetPositions() - ${maxAttempts}번 시도 후 실패`);
+    return [];
+}
+
+
+// 주기적 패턴 감지 함수
+function checkCyclicPattern(positions) {
+    if (positions.length < 4) return false;
+    for (let i = 0; i < positions.length - 3; i++) {
+        const seq = positions.slice(i, i + 4);
+        const diffs = seq.slice(1).map((p, idx) => p - seq[idx]);
+        if (diffs[0] === diffs[2] && diffs[0] !== diffs[1]) { // A-B-C-A 패턴 체크
+            console.log(`checkCyclicPattern() - Cyclic pattern found: ${seq}, Diffs: ${diffs}`);
+            return true;
+        }
+    }
+    return false;
+}
+
+
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+
+
+// 패턴 분석 함수: 시퀀스의 패턴 유형과 횟수를 계산
+function analyzePatterns(sequence) {
+    const patternCounts = {
+        "A-B-A": 0,
+        "A-B-A-B": 0
+    };
+
+    const targetTypeSequence = sequence.map(s => s.targetType);
+
+    for (let i = 2; i < targetTypeSequence.length; i++) {
+        const last3 = targetTypeSequence.slice(i - 2, i + 1);
+        if (last3[0] === last3[2] && last3[0] !== last3[1] && last3[0] !== "non-target" && last3[2] !== "non-target") {
+            patternCounts["A-B-A"]++;
+        }
+    }
+
+    for (let i = 3; i < targetTypeSequence.length; i++) {
+        const last4 = targetTypeSequence.slice(i - 3, i + 1);
+        if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1] && last4[0] !== "non-target" && last4[2] !== "non-target") {
+            patternCounts["A-B-A-B"]++;
+        }
+    }
+
+    console.log(`analyzePatterns() - 패턴 분석 완료:`, patternCounts);
+    return { patternCounts };
+}
+
+
+function findProblematicPositions(sequence) {
+    const problematicPositions = [];
+    const targetTypeSequence = sequence.map(s => s.targetType);
+
+    for (let i = 2; i < targetTypeSequence.length; i++) {
+        const last3 = targetTypeSequence.slice(i - 2, i + 1);
+        if (last3[0] === last3[2] && last3[0] !== last3[1] && last3[0] !== "non-target") {
+            problematicPositions.push(i - 1);
+        }
+    }
+
+    for (let i = 3; i < targetTypeSequence.length; i++) {
+        const last4 = targetTypeSequence.slice(i - 3, i + 1);
+        if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1] && last4[0] !== "non-target") {
+            problematicPositions.push(i - 2);
+        }
+    }
+
+    console.log(`findProblematicPositions() - 문제 위치 발견:`, problematicPositions);
+    return [...new Set(problematicPositions)];
+}
+
+function adjustTargetPositions(sequence, problematicPositions) {
+    problematicPositions.forEach(pos => {
+        const currentType = sequence[pos].targetType;
+        const newTargetType = shuffleArray(targetTypes.filter(t => t !== currentType))[0];
+        sequence[pos].targetType = newTargetType;
+        sequence[pos].isSceneTarget = newTargetType === 'scene';
+        sequence[pos].isLocationTarget = newTargetType === 'location';
+        sequence[pos].isSoundTarget = newTargetType === 'sound';
+        sequence[pos].isColorTarget = newTargetType === 'color';
+        console.log(`adjustTargetPositions() - 위치 ${pos} 조정: ${currentType} -> ${newTargetType}`);
+    });
+}
 
 
 function endBlock() {
@@ -1610,7 +1609,7 @@ function endBlock() {
     const totalColorErrors = gameState.colorErrors;
 
     // 디버깅: 오류 집계 상태 확인
-    console.log("endBlock() - Error counts before DOM update:", {
+    console.log("endBlock() - 오류 집계:", {
         sceneErrors: totalSceneErrors,
         locationErrors: totalLocationErrors,
         soundErrors: totalSoundErrors,
@@ -1631,18 +1630,17 @@ function endBlock() {
     if (gameState.soundTargets < gameState.targetCountGoals.sound) unmetGoals.push(`Sound: ${gameState.soundTargets}/${gameState.targetCountGoals.sound}`);
     if (gameState.colorTargets < gameState.targetCountGoals.color) unmetGoals.push(`Color: ${gameState.colorTargets}/${gameState.targetCountGoals.color}`);
     if (unmetGoals.length > 0) {
-        console.warn("endBlock() - Target goals not fully met:", unmetGoals, "Both targets:", gameState.bothTargets);
+        console.warn("endBlock() - 타겟 목표 미달성:", unmetGoals);
     } else {
-        console.log("endBlock() - All target goals met:", {
+        console.log("endBlock() - 모든 타겟 목표 달성:", {
             scene: gameState.sceneTargets,
             location: gameState.locationTargets,
             sound: gameState.soundTargets,
-            color: gameState.colorTargets,
-            both: gameState.bothTargets
+            color: gameState.colorTargets
         });
     }
 
-    // 정확도 계산 (음수 방지)
+    // 정확도 계산
     const totalTargets = gameState.sceneTargets + gameState.locationTargets + gameState.soundTargets + gameState.colorTargets;
     const totalCorrectRaw = (gameState.sceneTargets - totalSceneErrors) +
                            (gameState.locationTargets - totalLocationErrors) +
@@ -1653,17 +1651,27 @@ function endBlock() {
     gameState.accuracyHistory.push(accuracy);
     if (gameState.accuracyHistory.length > 2) gameState.accuracyHistory.shift();
 
-    console.log("endBlock() - Accuracy calculated:", {
-        totalTargets,
-        totalCorrectRaw,
-        totalCorrect,
-        accuracy: accuracy.toFixed(2) + "%",
-        history: gameState.accuracyHistory,
-        scene: { targets: gameState.sceneTargets, errors: totalSceneErrors },
-        location: { targets: gameState.locationTargets, errors: totalLocationErrors },
-        sound: { targets: gameState.soundTargets, errors: totalSoundErrors },
-        color: { targets: gameState.colorTargets, errors: totalColorErrors }
-    });
+    // 패턴 분석 호출
+    const { patternCounts, totalPatterns } = analyzePatterns(gameState.stimulusSequence);
+
+    // 한글 로그 출력: 패턴 분석 결과
+    console.log("=== 게임 종료 로그 ===");
+    console.log("패턴 분석 결과:");
+    for (const [pattern, count] of Object.entries(patternCounts)) {
+        console.log(`- ${pattern}: ${count}회`);
+    }
+    console.log(`전체 패턴 수: ${totalPatterns}회`);
+
+    // 한글 로그 출력: 게임 종합 정보
+    console.log("게임 종합 정보:");
+    console.log(`- 총 타겟 수: ${totalTargets}개`);
+    console.log(`- 총 오류 수: ${totalSceneErrors + totalLocationErrors + totalSoundErrors + totalColorErrors}개`);
+    console.log(`  * 장면 오류: ${totalSceneErrors}개`);
+    console.log(`  * 위치 오류: ${totalLocationErrors}개`);
+    console.log(`  * 소리 오류: ${totalSoundErrors}개`);
+    console.log(`  * 색상 오류: ${totalColorErrors}개`);
+    console.log(`- 정확도: ${accuracy.toFixed(2)}%`);
+    console.log(`- 현재 N백 레벨: ${gameState.nBackLevel}`);
 
     // 레벨 조정 로직
     let levelChange = '';
@@ -1677,29 +1685,16 @@ function endBlock() {
             nextNBackLevel = gameState.nBackLevel + 1;
             levelChange = '⬆️ 최고야! 레벨업!!♥️🥰';
             gameState.accuracyHistory = [];
-            console.log("endBlock() - Level up triggered:", {
-                lastAccuracy: lastAccuracy.toFixed(2) + "%",
-                secondLastAccuracy: secondLastAccuracy ? secondLastAccuracy.toFixed(2) + "%" : "N/A"
-            });
         } else if ((secondLastAccuracy <= 40 && lastAccuracy <= 40 && secondLastAccuracy !== null) || lastAccuracy <= 30) {
             nextNBackLevel = Math.max(1, gameState.nBackLevel - 1);
             levelChange = '⬇️ 괜찮아! 다시 해보자!😉♥️';
             gameState.accuracyHistory = [];
-            console.log("endBlock() - Level down triggered:", {
-                lastAccuracy: lastAccuracy.toFixed(2) + "%",
-                secondLastAccuracy: secondLastAccuracy ? secondLastAccuracy.toFixed(2) + "%" : "N/A"
-            });
         } else {
             levelChange = '➡️ 오 좋아! 킵고잉!👏♥️';
-            console.log("endBlock() - Level maintained:", {
-                lastAccuracy: lastAccuracy.toFixed(2) + "%",
-                secondLastAccuracy: secondLastAccuracy ? secondLastAccuracy.toFixed(2) + "%" : "N/A"
-            });
         }
         gameState.nBackLevel = nextNBackLevel;
     } else {
         levelChange = '🔒 레벨 고정됨';
-        console.log("endBlock() - Level locked, no change");
     }
 
     // UI 업데이트
@@ -1710,9 +1705,8 @@ function endBlock() {
     document.getElementById('resultScreen').style.display = 'flex';
     setBackgroundImageToResultScreen();
 
-    console.log("endBlock() - Block ended, nextNBackLevel:", nextNBackLevel, "timestamp:", Date.now());
+    console.log("endBlock() - 블록 종료, 다음 N백 레벨:", nextNBackLevel);
 }
-
 
 
 function showTitleScreen() {
