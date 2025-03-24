@@ -40,7 +40,7 @@
         <div id="scene-indicator" class="indicator-box">S</div>
         <div id="sound-indicator" class="indicator-box">A</div>
         <div id="location-indicator" class="indicator-box">L</div>
-        <div id="color-indicator" class="indicator-box">D</div>
+        <div id="color-indicator" class="indicator-box">C</div>
         <div id="stimulus-counter" style="display: none;">Stimulus: 0 / 30</div>
     </div>
 
@@ -83,12 +83,16 @@
         <h2>설정</h2>
         <div class="settings-group">
             <label>자극 유형 선택 (최소 2개, 최대 4개):</label>
-            <div>
-                <input type="checkbox" id="sceneStimulus" value="scene" checked> <label for="sceneStimulus">장면 (이미지)</label><br>
-                <input type="checkbox" id="locationStimulus" value="location" checked> <label for="locationStimulus">위치</label><br>
-                <input type="checkbox" id="soundStimulus" value="sound"> <label for="soundStimulus">소리</label><br>
-                <input type="checkbox" id="colorStimulus" value="color"> <label for="colorStimulus">색상</label>
-            </div>
+<div>
+    <input type="checkbox" id="sceneStimulus" value="scene" checked>
+    <label for="sceneStimulus" style="font-size: 13px;">장면 (이미지)</label><br>
+    <input type="checkbox" id="locationStimulus" value="location" checked>
+    <label for="locationStimulus" style="font-size: 13px;">위치</label><br>
+    <input type="checkbox" id="soundStimulus" value="sound">
+    <label for="soundStimulus" style="font-size: 13px;">소리</label><br>
+    <input type="checkbox" id="colorStimulus" value="color">
+    <label for="colorStimulus" style="font-size: 13px;">색상</label>
+</div>
         </div>
         <div class="settings-group">
             <label>한 라운드 자극 개수 (기본 30):</label>
