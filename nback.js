@@ -317,18 +317,52 @@ function getRandomColor() {
 function loadImageTextures() {
     imageTextures.length = 0;
     const baseUrl = gameState.imageSourceUrl || "images/";
+    const maxRetries = 3;
+    const promises = [];
+
     for (let i = 1; i <= 101; i++) {
         const filename = `image${String(i).padStart(3, '0')}.png`;
-        const texture = imageLoader.load(`${baseUrl}${filename}`, 
-            () => console.log(`Loaded: ${baseUrl}${filename}`),
-            undefined,
-            (err) => console.error(`Error loading ${baseUrl}${filename}:`, err)
-        );
-        let color = randomizeStimulusColor ? getRandomColor() : null;
-        imageTextures.push({ texture: texture, color: color });
-    }
-}
+        const loadPromise = new Promise((resolve, reject) => {
+            let attempts = 0;
 
+            function tryLoad() {
+                const texture = imageLoader.load(
+                    `${baseUrl}${filename}`,
+                    (loadedTexture) => {
+                        console.log(`loadImageTextures() - 성공적으로 로드됨: ${baseUrl}${filename}`);
+                        resolve({ texture: loadedTexture, color: randomizeStimulusColor ? getRandomColor() : null });
+                    },
+                    undefined,
+                    (err) => {
+                        attempts++;
+                        console.error(`loadImageTextures() - 로드 실패: ${baseUrl}${filename}, 시도 ${attempts}/${maxRetries}`, err);
+                        if (attempts < maxRetries) {
+                            setTimeout(tryLoad, 500); // 500ms 후 재시도
+                        } else {
+                            console.error(`loadImageTextures() - 최종 실패: ${baseUrl}${filename}`);
+                            resolve({ texture: null, color: null }); // 실패 시 null 반환
+                        }
+                    }
+                );
+            }
+
+            tryLoad();
+        });
+        promises.push(loadPromise);
+    }
+
+    return Promise.all(promises).then(results => {
+        results.forEach(result => {
+            if (result.texture) {
+                imageTextures.push(result);
+            }
+        });
+        console.log(`loadImageTextures() - 총 ${imageTextures.length}/101 이미지 로드 완료`);
+        if (imageTextures.length < 101) {
+            console.warn(`loadImageTextures() - 일부 이미지 로드 실패, 게임 진행 가능 여부 확인 필요`);
+        }
+    });
+}
 function createStimulusImage(imageIndex, panel, colorIndex) {
   clearStimulus(panel);
   const imageGeometry = new THREE.PlaneGeometry(panelWidth * imageScale, panelHeight * imageScale);
@@ -1235,15 +1269,16 @@ function handleColorResponse() {
 
 
 function setTargetGoal(type, baseValue) {
-    if (!Number.isInteger(baseValue) || baseValue <= 0) {
-        console.error(`Invalid target goal for ${type}: ${baseValue}`);
-        return;
+    if (!Number.isInteger(baseValue) || baseValue < 0) {
+        console.error(`setTargetGoal() - 잘못된 타겟 목표 값: ${type}=${baseValue}`);
+        baseValue = 0; // 기본값으로 0 설정
     }
-    const adjustedValue = Math.max(1, Math.min(baseValue, Math.floor(gameState.stimuliPerBlock / (gameState.nBackLevel + 1))));
+    // 최대 타겟 수는 stimuliPerBlock과 nBackLevel을 고려해 제한
+    const maxTargets = Math.floor((gameState.stimuliPerBlock - gameState.nBackLevel) / (gameState.nBackLevel + 1));
+    const adjustedValue = Math.max(0, Math.min(baseValue, maxTargets));
     gameState.targetCountGoals[type] = adjustedValue;
-    console.log(`setTargetGoal() - Set target goal for ${type} to ${adjustedValue} based on nBackLevel: ${gameState.nBackLevel}, stimuliPerBlock: ${gameState.stimuliPerBlock}`);
+    console.log(`setTargetGoal() - ${type} 타겟 목표 설정: 입력값=${baseValue}, 조정값=${adjustedValue}, 최대 가능=${maxTargets}`);
 }
-
 
 function startBlock() {
     console.log("startBlock() - Starting new block at timestamp:", Date.now());
@@ -1430,7 +1465,7 @@ function generateStimulusSequence() {
     while (attempts < 10) {
         const { patternCounts } = analyzePatterns(sequence);
         console.log(`generateStimulusSequence() - 패턴 검사 (${attempts + 1}/10):`, patternCounts);
-        if (patternCounts["A-B-A"] <= 2 && patternCounts["A-B-A-B"] <= 1) {
+        if (patternCounts["A-B-A"] <= 3 && patternCounts["A-B-A-B"] <= 1) {
             console.log("generateStimulusSequence() - 패턴 검사 통과: 시도 횟수", attempts);
             break;
         }
@@ -2157,6 +2192,8 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    console.log("window.onresize - 뷰포트 업데이트: width:", window.innerWidth, "height:", window.innerHeight);
+    renderer.render(scene, camera); // 즉시 렌더링 호출
 });
 
 function animate() {
@@ -2175,11 +2212,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.onload = () => {
     console.log("Window fully loaded (including resources) at timestamp:", Date.now());
-
-    // 기존 초기화 함수 호출
-    loadImageTextures();
-    loadSettings();
-    animate();
+    loadImageTextures().then(() => {
+        loadSettings();
+        animate();
 
     // 고급 설정 토글 버튼 이벤트 리스너
     const toggleAdvancedSettingsBtn = document.getElementById('toggleAdvancedSettingsBtn');
@@ -2241,4 +2276,7 @@ window.onload = () => {
     } else {
         console.error("closeSettingsBtn not found in DOM at window.onload");
     }
+}).catch(err => {
+        console.error("window.onload - 이미지 로딩 중 오류 발생:", err);
+    });
 };
