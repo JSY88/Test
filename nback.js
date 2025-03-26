@@ -493,7 +493,7 @@ function introduceInterference(currentImageIndex, currentPanelIndex, currentSoun
         }
         console.log("introduceInterference() - Random interference type selected:", currentInterferenceType, "rand:", rand);
     }
-    const interferenceChance = 0.9;
+    const interferenceChance = 0.0;
     if (Math.random() < interferenceChance) {
         let interferedImageIndex = currentImageIndex;
         let interferedPanelIndex = currentPanelIndex;
