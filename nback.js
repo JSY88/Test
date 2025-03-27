@@ -46,7 +46,7 @@ accuracyHistory: [], // 정확도 기록 배열 추가
     inResponseWindow: false,
     canRespond: true,
     presentedStimulusHistory: [],
-    interferenceType: "random",
+    interferenceType: "none",
     randomInterferenceProbabilities: {
         "previous": 0.33,
         "cyclic": 0.33,
