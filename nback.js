@@ -499,7 +499,7 @@ function introduceInterference(currentImageIndex, currentPanelIndex, currentSoun
         console.log("introduceInterference() - 무작위 간섭 타입 선택:", currentInterferenceType, "rand:", rand);
     }
 
-    const interferenceChance = 0.5; // 간섭 발생 확률 조정 (기존 0.0에서 테스트용으로 변경)
+    const interferenceChance = 1.0; // 간섭 발생 확률 조정 (기존 0.0에서 테스트용으로 변경)
     if (Math.random() < interferenceChance) {
         let interferedImageIndex = currentImageIndex;
         let interferedPanelIndex = currentPanelIndex;
@@ -983,15 +983,25 @@ function resumeGame() {
 
 // 🖼️ 전체화면 토글 함수
 function toggleFullscreen() {
+    const guide = document.getElementById('fullscreenGuide'); // 메시지 요소
     if (!gameState.isFullscreen) {
         if (document.documentElement.requestFullscreen) {
             document.documentElement.requestFullscreen();
-        } else if (document.documentElement.mozRequestFullScreen) { /* Firefox */
+        } else if (document.documentElement.mozRequestFullScreen) {
             document.documentElement.mozRequestFullScreen();
-        } else if (document.documentElement.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+        } else if (document.documentElement.webkitRequestFullscreen) {
             document.documentElement.webkitRequestFullscreen();
-        } else if (document.documentElement.msRequestFullscreen) { /* IE/Edge */
+        } else if (document.documentElement.msRequestFullscreen) {
             document.documentElement.msRequestFullscreen();
+        }
+        // iPhone에서만 메시지 표시
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            guide.style.display = 'block';
+            console.log('전체화면 안내 메시지 표시됨! 📱');
+            setTimeout(() => {
+                guide.style.display = 'none';
+                console.log('전체화면 안내 메시지 3초 후 숨김! ⏳');
+            }, 3000);
         }
         gameState.isFullscreen = true;
         document.getElementById('fullscreenBtn').textContent = 'Normal';
@@ -999,20 +1009,20 @@ function toggleFullscreen() {
     } else {
         if (document.exitFullscreen) {
             document.exitFullscreen();
-        } else if (document.mozCancelFullScreen) { /* Firefox */
+        } else if (document.mozCancelFullScreen) {
             document.mozCancelFullScreen();
-        } else if (document.webkitExitFullscreen) { /* Chrome, Safari and Opera */
+        } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) { /* IE/Edge */
+        } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
         }
+        guide.style.display = 'none'; // 모드 해제 시 메시지 즉시 숨김
+        console.log('전체화면 안내 메시지 숨김 (모드 해제)! 🚪');
         gameState.isFullscreen = false;
         document.getElementById('fullscreenBtn').textContent = 'Full';
-        console.log('일반 화면 모드! ☀️');
+        console.log('일반 화면 모드로 복귀! ☀️');
     }
 }
-
-
 
 
 
@@ -1363,30 +1373,23 @@ function startBlock() {
 
 
 function generateStimulusSequence() {
-    console.log("generateStimulusSequence() - 시퀀스 생성 시작: 패턴 방지 및 구간 분할 적용");
+    console.log("generateStimulusSequence() - 시퀀스 생성 시작: 새로운 패턴방지 로직 적용");
     const sequence = [];
     const recentLimit = gameState.nBackLevel * 2;
     const targetGoals = { scene: 4, location: 4, sound: 2, color: 4 };
     const targetPositions = {};
     const targetTypes = ['scene', 'location', 'sound', 'color'];
-    const minInterval = gameState.nBackLevel + 1; // nBackLevel에 따라 동적 간격 설정
+
+    // 설정값 가져오기
+    const patternPreventionStrength = parseInt(document.getElementById('patternPreventionStrength').value) || 5;
+    const minTargetInterval = parseInt(document.getElementById('minTargetInterval').value) || 2;
+    const maxTargetInterval = Math.min(parseInt(document.getElementById('maxTargetInterval').value) || 10, gameState.stimuliPerBlock - gameState.nBackLevel - 1);
     const totalStimuli = gameState.stimuliPerBlock - gameState.nBackLevel;
-    const intervalCount = 5; // 5개 구간으로 분할
-    const stimuliPerInterval = Math.floor(totalStimuli / intervalCount);
-    const extraStimuli = totalStimuli % intervalCount;
 
     // 구간별 타겟 위치 선정
     targetTypes.forEach(type => {
-        targetPositions[type] = [];
-        let remainingTargets = targetGoals[type];
-        for (let i = 0; i < intervalCount; i++) {
-            const intervalStimuli = stimuliPerInterval + (i < extraStimuli ? 1 : 0);
-            const intervalTargets = Math.floor(remainingTargets / (intervalCount - i));
-            remainingTargets -= intervalTargets;
-            const intervalPositions = selectTargetPositions(intervalStimuli, intervalTargets, minInterval);
-            targetPositions[type].push(...intervalPositions.map(pos => pos + i * stimuliPerInterval));
-            console.log(`generateStimulusSequence() - 구간 ${i + 1}/${intervalCount}, ${type} 타겟 위치:`, intervalPositions);
-        }
+        targetPositions[type] = selectTargetPositions(totalStimuli, targetGoals[type], minTargetInterval, maxTargetInterval, patternPreventionStrength);
+        console.log(`generateStimulusSequence() - ${type} 타겟 위치:`, targetPositions[type]);
     });
 
     // 초기 자극 (타겟 없음)
@@ -1407,23 +1410,13 @@ function generateStimulusSequence() {
         updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    // 타겟 유형 할당 및 패턴 방지
+    // 타겟 및 논타겟 시퀀스 생성
     const allTargets = [];
     targetTypes.forEach(type => {
         targetPositions[type].forEach(pos => allTargets.push({ pos, type }));
     });
     allTargets.sort((a, b) => a.pos - b.pos);
 
-    // 동일 유형 연속 방지
-    for (let i = 1; i < allTargets.length; i++) {
-        if (allTargets[i].type === allTargets[i - 1].type && allTargets[i].pos - allTargets[i - 1].pos < minInterval) {
-            shuffleArray(targetTypes);
-            allTargets[i].type = targetTypes.find(t => t !== allTargets[i - 1].type);
-            console.log(`generateStimulusSequence() - 동일 유형 연속 방지: 위치 ${allTargets[i].pos}에서 ${allTargets[i].type}으로 변경`);
-        }
-    }
-
-    // 시퀀스 생성
     for (let i = 0; i < totalStimuli; i++) {
         const absoluteIndex = i + gameState.nBackLevel;
         const nBackIndex = absoluteIndex - gameState.nBackLevel;
@@ -1451,28 +1444,32 @@ function generateStimulusSequence() {
         updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    // 패턴 분석 및 조정
-    let attempts = 0;
-    while (attempts < 10) {
-        const { patternCounts } = analyzePatterns(sequence);
-        console.log(`generateStimulusSequence() - 패턴 검사 (${attempts + 1}/10):`, patternCounts);
-        if (patternCounts["A-B-A"] <= 3 && patternCounts["A-B-A-B"] <= 1) {
-            console.log("generateStimulusSequence() - 패턴 검사 통과: 시도 횟수", attempts);
-            break;
-        }
-        // 조정 로직: 패턴이 있는 위치의 타겟을 재배치
-        const problematicPositions = findProblematicPositions(sequence);
-        adjustTargetPositions(sequence, problematicPositions);
-        attempts++;
-    }
-    if (attempts >= 10) {
-        console.warn("generateStimulusSequence() - 10번 시도 후 패턴 조정 실패");
-    }
-
-    console.log("generateStimulusSequence() - 최종 시퀀스 생성 완료: 길이", sequence.length);
+    console.log("generateStimulusSequence() - 시퀀스 생성 완료: 길이", sequence.length);
     return sequence;
 }
 
+function selectTargetPositions(totalStimuli, targetCount, minInterval, maxInterval, strength) {
+    console.log(`selectTargetPositions() - 타겟 위치 선정: 총 자극=${totalStimuli}, 타겟 수=${targetCount}, 최소=${minInterval}, 최대=${maxInterval}, 강도=${strength}`);
+    const positions = [];
+    const maxAttempts = 200;
+    let attempts = 0;
+
+    while (positions.length < targetCount && attempts < maxAttempts) {
+        const pos = Math.floor(Math.random() * totalStimuli);
+        const valid = positions.every(p => {
+            const diff = Math.abs(p - pos);
+            return diff >= minInterval && diff <= maxInterval;
+        });
+        if (valid && !positions.includes(pos)) {
+            positions.push(pos);
+        }
+        attempts++;
+    }
+
+    positions.sort((a, b) => a - b);
+    console.log(`selectTargetPositions() - 선정된 위치:`, positions);
+    return positions;
+}
 
 
 
@@ -1886,6 +1883,8 @@ document.getElementById('mainMenuResultBtn').addEventListener('click', () => {
     console.log("mainMenuResultBtn - showTitleScreen 호출 완료"); // 디버깅: 호출 확인
 });
 
+
+
 // 🖼️ 전체화면 버튼 이벤트
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 
@@ -2154,6 +2153,11 @@ window.addEventListener('resize', () => {
 function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
+}
+
+if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    document.getElementById('fullscreenGuide').style.display = 'block';
+    console.log("아이폰 감지 - 전체화면 안내 표시");
 }
 
 document.addEventListener('DOMContentLoaded', () => {
