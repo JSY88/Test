@@ -1939,42 +1939,80 @@ document.getElementById('applySettingsBtn').addEventListener('click', () => {
     document.getElementById('settingsPanel').style.display = 'none';
 });
 
+
+
+
+
+
+
 function populateSettings() {
+    // 자극 유형 체크박스 초기화
     document.getElementById('sceneStimulus').checked = gameState.stimulusTypes.includes('scene');
     document.getElementById('locationStimulus').checked = gameState.stimulusTypes.includes('location');
     document.getElementById('soundStimulus').checked = gameState.stimulusTypes.includes('sound');
     document.getElementById('colorStimulus').checked = gameState.stimulusTypes.includes('color');
+
+    // 숫자 및 텍스트 입력 필드 초기화
+    document.getElementById('stimuliPerBlock').value = gameState.stimuliPerBlock;
+    document.getElementById('stimulusDuration').value = gameState.stimulusDuration;
+    document.getElementById('stimulusInterval').value = gameState.stimulusInterval;
+    document.getElementById('patternPreventionStrength').value = gameState.patternPreventionStrength;
+    document.getElementById('minTargetInterval').value = gameState.minTargetInterval;
+    document.getElementById('maxTargetInterval').value = gameState.maxTargetInterval;
+    document.getElementById('nearMissProbability').value = gameState.nearMissProbability;
+
+    // URL 및 기타 설정 초기화
     document.getElementById('imageSourceUrl').value = gameState.imageSourceUrl;
     document.getElementById('resultImageUrl').value = gameState.resultImageUrl;
-    document.getElementById('button1Assignment').value = gameState.stimulusTypes.includes('scene') ? 'scene' : 'location';
-    document.getElementById('button2Assignment').value = gameState.stimulusTypes.includes('sound') ? 'sound' : 'scene';
-    document.getElementById('button3Assignment').value = gameState.stimulusTypes.includes('location') ? 'location' : 'sound';
-    document.getElementById('button4Assignment').value = gameState.stimulusTypes.includes('color') ? 'color' : 'location';
+    document.getElementById('soundSourceSelect').value = gameState.soundSource;
+    document.getElementById('soundSourceUrl').value = gameState.soundSourceUrl;
+
+    // 키 설정 초기화
     document.getElementById('sceneKey').value = gameState.sceneKey;
     document.getElementById('locationKey').value = gameState.locationKey;
     document.getElementById('soundKey').value = gameState.soundKey;
     document.getElementById('colorKey').value = gameState.colorKey;
-    document.getElementById('soundSourceSelect').value = gameState.soundSource;
-    document.getElementById('soundSourceUrl').value = gameState.soundSourceUrl;
-    document.getElementById('button1Left').value = parseInt(sceneIndicator.style.left) || 30;
-    document.getElementById('button1Bottom').value = parseInt(sceneIndicator.style.bottom) || 40;
-    document.getElementById('button2Left').value = parseInt(soundIndicator.style.left) || 130;
-    document.getElementById('button2Bottom').value = parseInt(soundIndicator.style.bottom) || 40;
-    document.getElementById('button3Right').value = parseInt(locationIndicator.style.right) || 130;
-    document.getElementById('button3Bottom').value = parseInt(locationIndicator.style.bottom) || 40;
-    document.getElementById('button4Right').value = parseInt(colorIndicator.style.right) || 30;
-    document.getElementById('button4Bottom').value = parseInt(colorIndicator.style.bottom) || 40;
-    document.getElementById('buttonBgColor').value = '#ffffff';
-    document.getElementById('buttonBgOpacity').value = 0.1;
-    document.getElementById('buttonTextColor').value = '#ffffff';
-    document.getElementById('buttonTextOpacity').value = 0.2;
-    document.getElementById('buttonWidth').value = 80;
-    document.getElementById('buttonHeight').value = 80;
-document.getElementById('stimuliPerBlock').value = gameState.stimuliPerBlock;
-    document.getElementById('stimulusDuration').value = gameState.stimulusDuration;
-    document.getElementById('stimulusInterval').value = gameState.stimulusInterval;
-}
 
+    // 버튼 스타일 초기화
+    document.getElementById('buttonBgColor').value = gameState.buttonStyles.bgColor;
+    document.getElementById('buttonBgOpacity').value = gameState.buttonStyles.bgOpacity;
+    document.getElementById('buttonTextColor').value = gameState.buttonStyles.textColor;
+    document.getElementById('buttonTextOpacity').value = gameState.buttonStyles.textOpacity;
+    document.getElementById('buttonWidth').value = gameState.buttonStyles.width;
+    document.getElementById('buttonHeight').value = gameState.buttonStyles.height;
+
+    // 인디케이터 위치 초기화
+    document.getElementById('button1Left').value = parseInt(sceneIndicator.style.left) || 20;
+    document.getElementById('button1Bottom').value = parseInt(sceneIndicator.style.bottom) || 20;
+    document.getElementById('button2Left').value = parseInt(soundIndicator.style.left) || 120;
+    document.getElementById('button2Bottom').value = parseInt(soundIndicator.style.bottom) || 20;
+    document.getElementById('button3Right').value = parseInt(locationIndicator.style.right) || 120;
+    document.getElementById('button3Bottom').value = parseInt(locationIndicator.style.bottom) || 20;
+    document.getElementById('button4Right').value = parseInt(colorIndicator.style.right) || 20;
+    document.getElementById('button4Bottom').value = parseInt(colorIndicator.style.bottom) || 20;
+
+    // 설정값이 UI에 반영되었는지 로그로 확인
+    console.log("populateSettings() - UI에 설정값 반영 완료", { 
+        stimulusTypes: gameState.stimulusTypes,
+        stimuliPerBlock: gameState.stimuliPerBlock,
+        stimulusDuration: gameState.stimulusDuration,
+        stimulusInterval: gameState.stimulusInterval,
+        patternPreventionStrength: gameState.patternPreventionStrength,
+        minTargetInterval: gameState.minTargetInterval,
+        maxTargetInterval: gameState.maxTargetInterval,
+        nearMissProbability: gameState.nearMissProbability,
+        imageSourceUrl: gameState.imageSourceUrl,
+        resultImageUrl: gameState.resultImageUrl,
+        soundSource: gameState.soundSource,
+        soundSourceUrl: gameState.soundSourceUrl,
+        sceneKey: gameState.sceneKey,
+        locationKey: gameState.locationKey,
+        soundKey: gameState.soundKey,
+        colorKey: gameState.colorKey,
+        buttonStyles: gameState.buttonStyles,
+        timestamp: Date.now()
+    });
+}
 
 
 
@@ -1996,62 +2034,68 @@ function applySettings() {
         return;
     }
 
-    gameState.stimulusTypes = newStimulusTypes;
-    gameState.stimuliPerBlock = Math.min(Math.max(parseInt(document.getElementById('stimuliPerBlock').value) || 30, 10), 100);
-    gameState.stimulusDuration = Math.min(Math.max(parseInt(document.getElementById('stimulusDuration').value) || 1000, 500), 5000);
-    gameState.stimulusInterval = Math.min(Math.max(parseInt(document.getElementById('stimulusInterval').value) || 2500, 1000), 10000);
+    // 입력값을 명시적으로 파싱하고 디버깅 로그 추가
+    const rawStimuliPerBlock = parseInt(document.getElementById('stimuliPerBlock').value, 10);
+    const rawStimulusDuration = parseInt(document.getElementById('stimulusDuration').value, 10);
+    const rawStimulusInterval = parseInt(document.getElementById('stimulusInterval').value, 10);
+    const rawPatternPreventionStrength = parseInt(document.getElementById('patternPreventionStrength').value, 10);
+    const rawMinTargetInterval = parseInt(document.getElementById('minTargetInterval').value, 10);
+    const rawMaxTargetInterval = parseInt(document.getElementById('maxTargetInterval').value, 10);
+    const rawNearMissProbability = parseFloat(document.getElementById('nearMissProbability').value);
 
-    gameState.patternPreventionStrength = Math.min(Math.max(parseInt(document.getElementById('patternPreventionStrength').value) || 5, 0), 10);
-    gameState.minTargetInterval = Math.min(Math.max(parseInt(document.getElementById('minTargetInterval').value) || 2, 1), 20);
-    gameState.maxTargetInterval = Math.min(Math.max(parseInt(document.getElementById('maxTargetInterval').value) || 10, 5), 50);
+    console.log("applySettings() - UI에서 가져온 원시 값:", {
+        rawStimuliPerBlock, rawStimulusDuration, rawStimulusInterval,
+        rawPatternPreventionStrength, rawMinTargetInterval, rawMaxTargetInterval, rawNearMissProbability
+    });
+
+    // NaN 체크 및 범위 조정
+    gameState.stimulusTypes = newStimulusTypes;
+    gameState.stimuliPerBlock = isNaN(rawStimuliPerBlock) ? 30 : Math.min(Math.max(rawStimuliPerBlock, 10), 100);
+    gameState.stimulusDuration = isNaN(rawStimulusDuration) ? 1000 : Math.min(Math.max(rawStimulusDuration, 500), 5000);
+    gameState.stimulusInterval = isNaN(rawStimulusInterval) ? 2500 : Math.min(Math.max(rawStimulusInterval, 1000), 10000);
+    gameState.patternPreventionStrength = isNaN(rawPatternPreventionStrength) ? 5 : Math.min(Math.max(rawPatternPreventionStrength, 0), 10);
+    gameState.minTargetInterval = isNaN(rawMinTargetInterval) ? 2 : Math.min(Math.max(rawMinTargetInterval, 1), 20);
+    gameState.maxTargetInterval = isNaN(rawMaxTargetInterval) ? 10 : Math.min(Math.max(rawMaxTargetInterval, 5), 50);
+    gameState.nearMissProbability = isNaN(rawNearMissProbability) ? 0.3 : Math.min(Math.max(rawNearMissProbability, 0), 1);
+
     if (gameState.maxTargetInterval < gameState.minTargetInterval) {
         gameState.maxTargetInterval = gameState.minTargetInterval + 1;
-        console.log("applySettings() - 경고: 최대 간격이 최소 간격보다 작아 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
+        console.log("applySettings() - 최대 간격 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
     }
 
-    gameState.nearMissProbability = Math.min(Math.max(parseFloat(document.getElementById('nearMissProbability').value) || 0.1, 0), 1);
+    // 기타 설정 적용
+    gameState.imageSourceUrl = document.getElementById('imageSourceUrl').value || 'images/';
+    gameState.resultImageUrl = document.getElementById('resultImageUrl').value || '';
+    gameState.soundSource = document.getElementById('soundSourceSelect').value || 'pianoTones';
+    gameState.soundSourceUrl = document.getElementById('soundSourceUrl').value || 'sounds/';
+    gameState.sceneKey = document.getElementById('sceneKey').value.toUpperCase() || 'S';
+    gameState.locationKey = document.getElementById('locationKey').value.toUpperCase() || 'A';
+    gameState.soundKey = document.getElementById('soundKey').value.toUpperCase() || 'L';
+    gameState.colorKey = document.getElementById('colorKey').value.toUpperCase() || 'D';
 
-    gameState.imageSourceUrl = document.getElementById('imageSourceUrl').value;
-    gameState.resultImageUrl = document.getElementById('resultImageUrl').value;
-    gameState.soundSource = document.getElementById('soundSourceSelect').value;
-    gameState.soundSourceUrl = document.getElementById('soundSourceUrl').value;
-
-    gameState.sceneKey = document.getElementById('sceneKey').value.toUpperCase();
-    gameState.locationKey = document.getElementById('locationKey').value.toUpperCase();
-    gameState.soundKey = document.getElementById('soundKey').value.toUpperCase();
-    gameState.colorKey = document.getElementById('colorKey').value.toUpperCase();
-
-    const bgColor = document.getElementById('buttonBgColor').value;
+    // 버튼 스타일 적용
+    const bgColor = document.getElementById('buttonBgColor').value || '#ffffff';
     const bgOpacity = Math.min(Math.max(parseFloat(document.getElementById('buttonBgOpacity').value) || 0.1, 0), 1);
-    const textColor = document.getElementById('buttonTextColor').value;
+    const textColor = document.getElementById('buttonTextColor').value || '#ffffff';
     const textOpacity = Math.min(Math.max(parseFloat(document.getElementById('buttonTextOpacity').value) || 0.0, 0), 1);
-    const width = Math.max(parseInt(document.getElementById('buttonWidth').value) || 80, 20);
-    const height = Math.max(parseInt(document.getElementById('buttonHeight').value) || 80, 20);
+    const width = Math.max(parseInt(document.getElementById('buttonWidth').value, 10) || 80, 20);
+    const height = Math.max(parseInt(document.getElementById('buttonHeight').value, 10) || 80, 20);
 
     gameState.buttonStyles = { bgColor, bgOpacity, textColor, textOpacity, width, height };
 
-    [sceneIndicator, soundIndicator, locationIndicator, colorIndicator].forEach(indicator => {
-        indicator.style.left = null;
-        indicator.style.right = null;
-        indicator.style.bottom = null;
-    });
-
-    sceneIndicator.style.left = `${document.getElementById('button1Left').value}px`;
-    sceneIndicator.style.bottom = `${document.getElementById('button1Bottom').value}px`;
-    soundIndicator.style.left = `${document.getElementById('button2Left').value}px`;
-    soundIndicator.style.bottom = `${document.getElementById('button2Bottom').value}px`;
-    locationIndicator.style.right = `${document.getElementById('button3Right').value}px`;
-    locationIndicator.style.bottom = `${document.getElementById('button3Bottom').value}px`;
-    colorIndicator.style.right = `${document.getElementById('button4Right').value}px`;
-    colorIndicator.style.bottom = `${document.getElementById('button4Bottom').value}px`;
-
-    [sceneIndicator, soundIndicator, locationIndicator, colorIndicator].forEach(indicator => {
+    // 인디케이터 위치 및 스타일 적용
+    const indicators = [sceneIndicator, soundIndicator, locationIndicator, colorIndicator];
+    indicators.forEach((indicator, i) => {
+        indicator.style.left = i < 2 ? `${document.getElementById(`button${i + 1}Left`).value}px` : null;
+        indicator.style.right = i >= 2 ? `${document.getElementById(`button${i + 1}Right`).value}px` : null;
+        indicator.style.bottom = `${document.getElementById(`button${i + 1}Bottom`).value}px`;
         indicator.style.backgroundColor = hexToRgba(bgColor, bgOpacity);
         indicator.style.color = hexToRgba(textColor, textOpacity);
         indicator.style.width = `${width}px`;
         indicator.style.height = `${height}px`;
     });
 
+    // 로컬 스토리지 저장
     localStorage.setItem('stimulusTypes', JSON.stringify(gameState.stimulusTypes));
     localStorage.setItem('stimuliPerBlock', gameState.stimuliPerBlock);
     localStorage.setItem('stimulusDuration', gameState.stimulusDuration);
@@ -2068,28 +2112,17 @@ function applySettings() {
     localStorage.setItem('locationKey', gameState.locationKey);
     localStorage.setItem('soundKey', gameState.soundKey);
     localStorage.setItem('colorKey', gameState.colorKey);
-    localStorage.setItem('sceneIndicatorPos', JSON.stringify({ left: sceneIndicator.style.left, bottom: sceneIndicator.style.bottom }));
-    localStorage.setItem('soundIndicatorPos', JSON.stringify({ left: soundIndicator.style.left, bottom: soundIndicator.style.bottom }));
-    localStorage.setItem('locationIndicatorPos', JSON.stringify({ right: locationIndicator.style.right, bottom: locationIndicator.style.bottom }));
-    localStorage.setItem('colorIndicatorPos', JSON.stringify({ right: colorIndicator.style.right, bottom: colorIndicator.style.bottom }));
     localStorage.setItem('buttonStyles', JSON.stringify(gameState.buttonStyles));
 
+    console.log("applySettings() - 설정 적용 완료", { ...gameState, timestamp: Date.now() });
     document.getElementById('settingsError').style.display = 'none';
     loadImageTextures();
-
-    console.log("applySettings() - 설정 저장 완료", {
-        stimulusTypes: gameState.stimulusTypes,
-        stimuliPerBlock: gameState.stimuliPerBlock,
-        stimulusDuration: gameState.stimulusDuration,
-        stimulusInterval: gameState.stimulusInterval,
-        patternPreventionStrength: gameState.patternPreventionStrength,
-        minTargetInterval: gameState.minTargetInterval,
-        maxTargetInterval: gameState.maxTargetInterval,
-        nearMissProbability: gameState.nearMissProbability,
-        buttonStyles: gameState.buttonStyles,
-        timestamp: Date.now()
-    });
 }
+
+
+
+
+
 
 
 
@@ -2125,20 +2158,36 @@ function loadSettings() {
     }
     document.getElementById('totalGamesTodayCountValue').textContent = gameState.totalGamesToday;
 
-    gameState.stimulusTypes = JSON.parse(localStorage.getItem('stimulusTypes')) || ['scene', 'location'];
-    gameState.stimuliPerBlock = Math.min(Math.max(parseInt(localStorage.getItem('stimuliPerBlock')) || 30, 10), 100);
-    gameState.stimulusDuration = Math.min(Math.max(parseInt(localStorage.getItem('stimulusDuration')) || 1000, 500), 5000);
-    gameState.stimulusInterval = Math.min(Math.max(parseInt(localStorage.getItem('stimulusInterval')) || 2500, 1000), 10000);
+    // 저장된 값 로드 및 유효성 검사
+    const savedStimulusTypes = JSON.parse(localStorage.getItem('stimulusTypes'));
+    gameState.stimulusTypes = (savedStimulusTypes && savedStimulusTypes.length >= 2 && savedStimulusTypes.length <= 4) ? savedStimulusTypes : ['scene', 'location'];
 
-    gameState.patternPreventionStrength = Math.min(Math.max(parseInt(localStorage.getItem('patternPreventionStrength')) || 5, 0), 10);
-    gameState.minTargetInterval = Math.min(Math.max(parseInt(localStorage.getItem('minTargetInterval')) || 2, 1), 20);
-    gameState.maxTargetInterval = Math.min(Math.max(parseInt(localStorage.getItem('maxTargetInterval')) || 10, 5), 50);
+    const savedStimuliPerBlock = parseInt(localStorage.getItem('stimuliPerBlock'));
+    gameState.stimuliPerBlock = isNaN(savedStimuliPerBlock) ? 30 : Math.min(Math.max(savedStimuliPerBlock, 10), 100);
+
+    const savedStimulusDuration = parseInt(localStorage.getItem('stimulusDuration'));
+    gameState.stimulusDuration = isNaN(savedStimulusDuration) ? 1000 : Math.min(Math.max(savedStimulusDuration, 500), 5000);
+
+    const savedStimulusInterval = parseInt(localStorage.getItem('stimulusInterval'));
+    gameState.stimulusInterval = isNaN(savedStimulusInterval) ? 2500 : Math.min(Math.max(savedStimulusInterval, 1000), 10000);
+
+    const savedPatternPreventionStrength = parseInt(localStorage.getItem('patternPreventionStrength'));
+    gameState.patternPreventionStrength = isNaN(savedPatternPreventionStrength) ? 5 : Math.min(Math.max(savedPatternPreventionStrength, 0), 10);
+
+    const savedMinTargetInterval = parseInt(localStorage.getItem('minTargetInterval'));
+    gameState.minTargetInterval = isNaN(savedMinTargetInterval) ? 2 : Math.min(Math.max(savedMinTargetInterval, 1), 20);
+
+    const savedMaxTargetInterval = parseInt(localStorage.getItem('maxTargetInterval'));
+    gameState.maxTargetInterval = isNaN(savedMaxTargetInterval) ? 10 : Math.min(Math.max(savedMaxTargetInterval, 5), 50);
+
+    const savedNearMissProbability = parseFloat(localStorage.getItem('nearMissProbability'));
+    gameState.nearMissProbability = isNaN(savedNearMissProbability) ? 0.1 : Math.min(Math.max(savedNearMissProbability, 0), 1);
+
+    // 최대 간격이 최소 간격보다 작은 경우 조정
     if (gameState.maxTargetInterval < gameState.minTargetInterval) {
         gameState.maxTargetInterval = gameState.minTargetInterval + 1;
         console.log("loadSettings() - 경고: 최대 간격이 최소 간격보다 작아 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
     }
-
-    gameState.nearMissProbability = Math.min(Math.max(parseFloat(localStorage.getItem('nearMissProbability')) || 0.1, 0), 1);
 
     gameState.imageSourceUrl = localStorage.getItem('imageSourceUrl') || 'images/';
     gameState.resultImageUrl = localStorage.getItem('resultImageUrl') || '';
@@ -2192,6 +2241,8 @@ function loadSettings() {
         timestamp: Date.now()
     });
 }
+
+
 
 
 
