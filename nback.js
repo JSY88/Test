@@ -1,6 +1,9 @@
  // Web Audio Context Initialization
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+let nearMissHistory = []; // 전역 변수: 니얼미스 이벤트(타겟 아닌 자극에 대한 오반응 추적)를 기록하는 배열
+
+
 // Game State
 const gameState = {
     stimulusDuration: 1000,      // 자극 제시 지속시간 (ms)
@@ -15,7 +18,10 @@ const gameState = {
     locationHistory: [],
     soundHistory: [],
     colorHistory: [],
+buttonStyles: null, // 버튼 스타일 저장용 속성 추가
 accuracyHistory: [], // 정확도 기록 배열 추가
+nearMissProbability: 0.3, // 니얼미스 발생 확률 (기본 10%)
+    nearMissResponses: 0,     // 니얼미스에 반응한 횟수
     sceneTargets: 0,
     locationTargets: 0,
     soundTargets: 0,
@@ -981,34 +987,34 @@ function toggleFullscreen() {
 
 function handleSceneResponse() {
     if (gameState.isPaused) return;
-    console.log("handleSceneResponse() - Before processing: canRespondScene:", gameState.canRespondScene, "sceneTargetProcessed:", gameState.sceneTargetProcessed, "currentStimulus:", gameState.currentStimulus);
+    console.log("handleSceneResponse() - 처리 시작: canRespondScene=", gameState.canRespondScene, "sceneTargetProcessed=", gameState.sceneTargetProcessed, "currentStimulus=", gameState.currentStimulus);
 
-    console.log("handleSceneResponse() - Current target state:", {
+    console.log("handleSceneResponse() - 현재 타겟 상태:", {
         currentIsSceneTarget: gameState.currentIsSceneTarget,
         inResponseWindow: gameState.inResponseWindow
     });
 
     if (!gameState.canRespondScene || gameState.sceneTargetProcessed) {
-        console.log("handleSceneResponse() - Response blocked: canRespondScene:", gameState.canRespondScene, "sceneTargetProcessed:", gameState.sceneTargetProcessed);
+        console.log("handleSceneResponse() - 응답 차단: canRespondScene=", gameState.canRespondScene, "sceneTargetProcessed=", gameState.sceneTargetProcessed);
         return;
     }
 
     gameState.sceneTargetProcessed = true;
-    gameState.canRespondScene = false; // 해당 타입만 비활성화
+    gameState.canRespondScene = false;
     if (gameState.currentStimulus <= gameState.nBackLevel) {
         showEarlyResponseFeedback('scene-indicator');
-        console.log("handleSceneResponse() - Early response, stimulus:", gameState.currentStimulus, "nBackLevel:", gameState.nBackLevel);
+        console.log("handleSceneResponse() - 조기 응답: stimulus=", gameState.currentStimulus, "nBackLevel=", gameState.nBackLevel);
         return;
     }
 
     gameState.sceneResponses++;
     const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1];
     const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel];
-    
-    console.log("handleSceneResponse() - Comparing scene: current imageIndex:", currentPresented.imageIndex, "with N-back imageIndex:", nBackPresented.imageIndex);
+
+    console.log("handleSceneResponse() - 장면 비교: 현재 imageIndex=", currentPresented.imageIndex, "N백 imageIndex=", nBackPresented.imageIndex);
 
     const isCorrect = currentPresented.imageIndex === nBackPresented.imageIndex;
-    console.log("handleSceneResponse() - Target verification:", {
+    console.log("handleSceneResponse() - 타겟 검증:", {
         predefined: gameState.currentIsSceneTarget,
         dynamic: isCorrect,
         match: gameState.currentIsSceneTarget === isCorrect
@@ -1019,45 +1025,59 @@ function handleSceneResponse() {
     if (gameState.currentIsSceneTarget) {
         if (!isCorrect) {
             gameState.sceneErrors++;
-            console.log("handleSceneResponse() - Scene error (target missed): sceneErrors:", gameState.sceneErrors, "isCorrect:", isCorrect);
+            console.log("handleSceneResponse() - 장면 오류 (타겟 놓침): sceneErrors=", gameState.sceneErrors, "isCorrect=", isCorrect);
         } else {
-            console.log("handleSceneResponse() - Correct scene response, isCorrect:", isCorrect);
+            console.log("handleSceneResponse() - 장면 정답: isCorrect=", isCorrect);
         }
     } else {
         gameState.sceneErrors++;
-        console.log("handleSceneResponse() - Scene error (false positive on non-target): sceneErrors:", gameState.sceneErrors);
+        console.log("handleSceneResponse() - 장면 오류 (논타겟 오반응): sceneErrors=", gameState.sceneErrors);
+        if (currentPresented.isNearMiss) {
+            gameState.nearMissResponses++;
+            console.log("handleSceneResponse() - 니얼미스 반응 감지: nearMissResponses=", gameState.nearMissResponses);
+        }
     }
 
-    console.log("handleSceneResponse() - After processing: sceneResponses:", gameState.sceneResponses, "sceneErrors:", gameState.sceneErrors, "sceneTargetProcessed:", gameState.sceneTargetProcessed);
+    console.log("handleSceneResponse() - 처리 완료: sceneResponses=", gameState.sceneResponses, "sceneErrors=", gameState.sceneErrors, "sceneTargetProcessed=", gameState.sceneTargetProcessed);
 }
+
+
+
+
+
+
 
 
 function handleLocationResponse() {
     if (gameState.isPaused) return;
-    console.log("handleLocationResponse() - Before processing: canRespond:", gameState.canRespond, "locationTargetProcessed:", gameState.locationTargetProcessed, "currentStimulus:", gameState.currentStimulus);
+    console.log("handleLocationResponse() - 처리 시작: canRespondLocation=", gameState.canRespondLocation, "locationTargetProcessed=", gameState.locationTargetProcessed, "currentStimulus=", gameState.currentStimulus);
 
-    // 디버깅: 현재 타겟 상태 확인
-    console.log("handleLocationResponse() - Current target state:", {
+    console.log("handleLocationResponse() - 현재 타겟 상태:", {
         currentIsLocationTarget: gameState.currentIsLocationTarget,
         inResponseWindow: gameState.inResponseWindow
     });
 
+    if (!gameState.canRespondLocation || gameState.locationTargetProcessed) {
+        console.log("handleLocationResponse() - 응답 차단: canRespondLocation=", gameState.canRespondLocation, "locationTargetProcessed=", gameState.locationTargetProcessed);
+        return;
+    }
+
     gameState.locationTargetProcessed = true;
+    gameState.canRespondLocation = false;
     if (gameState.currentStimulus <= gameState.nBackLevel) {
         showEarlyResponseFeedback('location-indicator');
-        console.log("handleLocationResponse() - Early response, stimulus:", gameState.currentStimulus, "nBackLevel:", gameState.nBackLevel);
+        console.log("handleLocationResponse() - 조기 응답: stimulus=", gameState.currentStimulus, "nBackLevel=", gameState.nBackLevel);
         return;
     }
 
     gameState.locationResponses++;
     const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1];
     const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel];
-    
-    // 디버깅: 비교 대상 확인
-    console.log("handleLocationResponse() - Comparing location: current panelIndex:", currentPresented.panelIndex, "with N-back panelIndex:", nBackPresented.panelIndex);
+
+    console.log("handleLocationResponse() - 위치 비교: 현재 panelIndex=", currentPresented.panelIndex, "N백 panelIndex=", nBackPresented.panelIndex);
 
     const isCorrect = currentPresented.panelIndex === nBackPresented.panelIndex;
-    console.log("handleLocationResponse() - Target verification:", {
+    console.log("handleLocationResponse() - 타겟 검증:", {
         predefined: gameState.currentIsLocationTarget,
         dynamic: isCorrect,
         match: gameState.currentIsLocationTarget === isCorrect
@@ -1068,46 +1088,52 @@ function handleLocationResponse() {
     if (gameState.currentIsLocationTarget) {
         if (!isCorrect) {
             gameState.locationErrors++;
-            console.log("handleLocationResponse() - Location error (target missed): locationErrors:", gameState.locationErrors, "isCorrect:", isCorrect);
+            console.log("handleLocationResponse() - 위치 오류 (타겟 놓침): locationErrors=", gameState.locationErrors, "isCorrect=", isCorrect);
         } else {
-            console.log("handleLocationResponse() - Correct location response, isCorrect:", isCorrect);
+            console.log("handleLocationResponse() - 위치 정답: isCorrect=", isCorrect);
         }
     } else {
-        // 논타겟 자극에 반응한 경우 (False Positive)
         gameState.locationErrors++;
-        console.log("handleLocationResponse() - Location error (false positive on non-target): locationErrors:", gameState.locationErrors);
+        console.log("handleLocationResponse() - 위치 오류 (논타겟 오반응): locationErrors=", gameState.locationErrors);
+        if (currentPresented.isNearMiss) {
+            gameState.nearMissResponses++;
+            console.log("handleLocationResponse() - 니얼미스 반응 감지: nearMissResponses=", gameState.nearMissResponses);
+        }
     }
 
-    // 디버깅: 오류 집계 확인
-    console.log("handleLocationResponse() - After processing: locationResponses:", gameState.locationResponses, "locationErrors:", gameState.locationErrors, "locationTargetProcessed:", gameState.locationTargetProcessed);
+    console.log("handleLocationResponse() - 처리 완료: locationResponses=", gameState.locationResponses, "locationErrors=", gameState.locationErrors, "locationTargetProcessed=", gameState.locationTargetProcessed);
 }
 
 function handleSoundResponse() {
     if (gameState.isPaused) return;
-    console.log("handleSoundResponse() - Before processing: canRespond:", gameState.canRespond, "soundTargetProcessed:", gameState.soundTargetProcessed, "currentStimulus:", gameState.currentStimulus);
+    console.log("handleSoundResponse() - 처리 시작: canRespondSound=", gameState.canRespondSound, "soundTargetProcessed=", gameState.soundTargetProcessed, "currentStimulus=", gameState.currentStimulus);
 
-    // 디버깅: 현재 타겟 상태 확인
-    console.log("handleSoundResponse() - Current target state:", {
+    console.log("handleSoundResponse() - 현재 타겟 상태:", {
         currentIsSoundTarget: gameState.currentIsSoundTarget,
         inResponseWindow: gameState.inResponseWindow
     });
 
+    if (!gameState.canRespondSound || gameState.soundTargetProcessed) {
+        console.log("handleSoundResponse() - 응답 차단: canRespondSound=", gameState.canRespondSound, "soundTargetProcessed=", gameState.soundTargetProcessed);
+        return;
+    }
+
     gameState.soundTargetProcessed = true;
+    gameState.canRespondSound = false;
     if (gameState.currentStimulus <= gameState.nBackLevel) {
         showEarlyResponseFeedback('sound-indicator');
-        console.log("handleSoundResponse() - Early response, stimulus:", gameState.currentStimulus, "nBackLevel:", gameState.nBackLevel);
+        console.log("handleSoundResponse() - 조기 응답: stimulus=", gameState.currentStimulus, "nBackLevel=", gameState.nBackLevel);
         return;
     }
 
     gameState.soundResponses++;
     const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1];
     const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel];
-    
-    // 디버깅: 비교 대상 확인
-    console.log("handleSoundResponse() - Comparing sound: current soundIndex:", currentPresented.soundIndex, "with N-back soundIndex:", nBackPresented.soundIndex);
+
+    console.log("handleSoundResponse() - 소리 비교: 현재 soundIndex=", currentPresented.soundIndex, "N백 soundIndex=", nBackPresented.soundIndex);
 
     const isCorrect = currentPresented.soundIndex === nBackPresented.soundIndex;
-    console.log("handleSoundResponse() - Target verification:", {
+    console.log("handleSoundResponse() - 타겟 검증:", {
         predefined: gameState.currentIsSoundTarget,
         dynamic: isCorrect,
         match: gameState.currentIsSoundTarget === isCorrect
@@ -1118,46 +1144,52 @@ function handleSoundResponse() {
     if (gameState.currentIsSoundTarget) {
         if (!isCorrect) {
             gameState.soundErrors++;
-            console.log("handleSoundResponse() - Sound error (target missed): soundErrors:", gameState.soundErrors, "isCorrect:", isCorrect);
+            console.log("handleSoundResponse() - 소리 오류 (타겟 놓침): soundErrors=", gameState.soundErrors, "isCorrect=", isCorrect);
         } else {
-            console.log("handleSoundResponse() - Correct sound response, isCorrect:", isCorrect);
+            console.log("handleSoundResponse() - 소리 정답: isCorrect=", isCorrect);
         }
     } else {
-        // 논타겟 자극에 반응한 경우 (False Positive)
         gameState.soundErrors++;
-        console.log("handleSoundResponse() - Sound error (false positive on non-target): soundErrors:", gameState.soundErrors);
+        console.log("handleSoundResponse() - 소리 오류 (논타겟 오반응): soundErrors=", gameState.soundErrors);
+        if (currentPresented.isNearMiss) {
+            gameState.nearMissResponses++;
+            console.log("handleSoundResponse() - 니얼미스 반응 감지: nearMissResponses=", gameState.nearMissResponses);
+        }
     }
 
-    // 디버깅: 오류 집계 확인
-    console.log("handleSoundResponse() - After processing: soundResponses:", gameState.soundResponses, "soundErrors:", gameState.soundErrors, "soundTargetProcessed:", gameState.soundTargetProcessed);
+    console.log("handleSoundResponse() - 처리 완료: soundResponses=", gameState.soundResponses, "soundErrors=", gameState.soundErrors, "soundTargetProcessed=", gameState.soundTargetProcessed);
 }
 
 function handleColorResponse() {
     if (gameState.isPaused) return;
-    console.log("handleColorResponse() - Before processing: canRespond:", gameState.canRespond, "colorTargetProcessed:", gameState.colorTargetProcessed, "currentStimulus:", gameState.currentStimulus);
+    console.log("handleColorResponse() - 처리 시작: canRespondColor=", gameState.canRespondColor, "colorTargetProcessed=", gameState.colorTargetProcessed, "currentStimulus=", gameState.currentStimulus);
 
-    // 디버깅: 현재 타겟 상태 확인
-    console.log("handleColorResponse() - Current target state:", {
+    console.log("handleColorResponse() - 현재 타겟 상태:", {
         currentIsColorTarget: gameState.currentIsColorTarget,
         inResponseWindow: gameState.inResponseWindow
     });
 
+    if (!gameState.canRespondColor || gameState.colorTargetProcessed) {
+        console.log("handleColorResponse() - 응답 차단: canRespondColor=", gameState.canRespondColor, "colorTargetProcessed=", gameState.colorTargetProcessed);
+        return;
+    }
+
     gameState.colorTargetProcessed = true;
+    gameState.canRespondColor = false;
     if (gameState.currentStimulus <= gameState.nBackLevel) {
         showEarlyResponseFeedback('color-indicator');
-        console.log("handleColorResponse() - Early response, stimulus:", gameState.currentStimulus, "nBackLevel:", gameState.nBackLevel);
+        console.log("handleColorResponse() - 조기 응답: stimulus=", gameState.currentStimulus, "nBackLevel=", gameState.nBackLevel);
         return;
     }
 
     gameState.colorResponses++;
     const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1];
     const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel];
-    
-    // 디버깅: 비교 대상 확인
-    console.log("handleColorResponse() - Comparing color: current colorIndex:", currentPresented.colorIndex, "with N-back colorIndex:", nBackPresented.colorIndex);
+
+    console.log("handleColorResponse() - 색상 비교: 현재 colorIndex=", currentPresented.colorIndex, "N백 colorIndex=", nBackPresented.colorIndex);
 
     const isCorrect = currentPresented.colorIndex === nBackPresented.colorIndex;
-    console.log("handleColorResponse() - Target verification:", {
+    console.log("handleColorResponse() - 타겟 검증:", {
         predefined: gameState.currentIsColorTarget,
         dynamic: isCorrect,
         match: gameState.currentIsColorTarget === isCorrect
@@ -1168,19 +1200,25 @@ function handleColorResponse() {
     if (gameState.currentIsColorTarget) {
         if (!isCorrect) {
             gameState.colorErrors++;
-            console.log("handleColorResponse() - Color error (target missed): colorErrors:", gameState.colorErrors, "isCorrect:", isCorrect);
+            console.log("handleColorResponse() - 색상 오류 (타겟 놓침): colorErrors=", gameState.colorErrors, "isCorrect=", isCorrect);
         } else {
-            console.log("handleColorResponse() - Correct color response, isCorrect:", isCorrect);
+            console.log("handleColorResponse() - 색상 정답: isCorrect=", isCorrect);
         }
     } else {
-        // 논타겟 자극에 반응한 경우 (False Positive)
         gameState.colorErrors++;
-        console.log("handleColorResponse() - Color error (false positive on non-target): colorErrors:", gameState.colorErrors);
+        console.log("handleColorResponse() - 색상 오류 (논타겟 오반응): colorErrors=", gameState.colorErrors);
+        if (currentPresented.isNearMiss) {
+            gameState.nearMissResponses++;
+            console.log("handleColorResponse() - 니얼미스 반응 감지: nearMissResponses=", gameState.nearMissResponses);
+        }
     }
 
-    // 디버깅: 오류 집계 확인
-    console.log("handleColorResponse() - After processing: colorResponses:", gameState.colorResponses, "colorErrors:", gameState.colorErrors, "colorTargetProcessed:", gameState.colorTargetProcessed);
+    console.log("handleColorResponse() - 처리 완료: colorResponses=", gameState.colorResponses, "colorErrors=", gameState.colorErrors, "colorTargetProcessed=", gameState.colorTargetProcessed);
 }
+
+
+
+
 
 
 
@@ -1198,7 +1236,7 @@ function setTargetGoal(type, baseValue) {
 }
 
 function startBlock() {
-    console.log("startBlock() - Starting new block at timestamp:", Date.now());
+    console.log("startBlock() - 새로운 블록 시작, 타임스탬프:", Date.now());
     gameState.isPlaying = true;
     gameState.isPaused = false;
     gameState.currentStimulus = 0;
@@ -1222,6 +1260,8 @@ function startBlock() {
     gameState.recentTargetTypes = [];
     gameState.recentInterferenceCount = 0;
     gameState.presentedStimulusHistory = [];
+    nearMissHistory = []; // 니얼미스 기록 초기화
+    console.log("startBlock() - nearMissHistory 초기화 완료, 길이:", nearMissHistory.length);
 
     // 동적 타겟 목표 설정
     setTargetGoal("scene", Math.ceil(3 * (gameState.nBackLevel / 2)));
@@ -1230,28 +1270,18 @@ function startBlock() {
     setTargetGoal("color", Math.ceil(3 * (gameState.nBackLevel / 2)));
 
     gameState.stimulusSequence = generateStimulusSequence();
-    // 나머지 코드 생략
-
-    // 타겟 목표 설정
-    //setTargetGoal("scene", 4);
-    //setTargetGoal("location", 4);
-    //setTargetGoal("sound", 2);
-    //setTargetGoal("color", 4);
-
-    // 자극 시퀀스 생성
-    gameState.stimulusSequence = generateStimulusSequence();
 
     // UI 전환
-    console.log("startBlock() - Checking DOM elements before UI transition");
+    console.log("startBlock() - DOM 요소 확인 후 UI 전환 시작");
     const titleScreen = document.getElementById('titleScreen');
     const gameScreen = document.getElementById('gameScreen');
     const blockCount = document.getElementById('blockCount');
 
     if (!titleScreen || !gameScreen || !blockCount) {
-        console.error("startBlock() - Missing critical UI elements:", {
-            titleScreen: titleScreen ? "Found" : "Missing",
-            gameScreen: gameScreen ? "Found" : "Missing",
-            blockCount: blockCount ? "Found" : "Missing"
+        console.error("startBlock() - 필수 UI 요소 누락:", {
+            titleScreen: titleScreen ? "발견" : "누락",
+            gameScreen: gameScreen ? "발견" : "누락",
+            blockCount: blockCount ? "발견" : "누락"
         });
         return;
     }
@@ -1273,11 +1303,9 @@ function startBlock() {
     setTimeout(() => {
         if (!gameState.isPaused) {
             generateNextStimulus();
-            console.log("startBlock() - First stimulus presented after 1-second delay", {
-                timestamp: Date.now()
-            });
+            console.log("startBlock() - 1초 후 첫 자극 제시 완료, 타임스탬프:", Date.now());
         } else {
-            console.log("startBlock() - Delayed stimulus skipped due to pause", {
+            console.log("startBlock() - 일시정지 상태로 인해 첫 자극 제시 생략:", {
                 isPaused: gameState.isPaused
             });
         }
@@ -1287,28 +1315,25 @@ function startBlock() {
 
 
 
-
 function generateStimulusSequence() {
-    console.log("generateStimulusSequence() - 시퀀스 생성 시작: 새로운 패턴방지 로직 적용");
+    console.log("generateStimulusSequence() - 시퀀스 생성 시작: 새로운 패턴방지 및 니얼미스 로직 적용");
+    console.log("generateStimulusSequence() - nearMissHistory 초기화 상태 확인, 길이:", nearMissHistory.length);
     const sequence = [];
     const recentLimit = gameState.nBackLevel * 2;
     const targetGoals = { scene: 4, location: 4, sound: 2, color: 4 };
     const targetPositions = {};
     const targetTypes = ['scene', 'location', 'sound', 'color'];
 
-    // 설정값 가져오기
-    const patternPreventionStrength = parseInt(document.getElementById('patternPreventionStrength').value) || 5;
-    const minTargetInterval = parseInt(document.getElementById('minTargetInterval').value) || 2;
-    const maxTargetInterval = Math.min(parseInt(document.getElementById('maxTargetInterval').value) || 10, gameState.stimuliPerBlock - gameState.nBackLevel - 1);
+    const patternPreventionStrength = gameState.patternPreventionStrength;
+    const minTargetInterval = gameState.minTargetInterval;
+    const maxTargetInterval = Math.min(gameState.maxTargetInterval, gameState.stimuliPerBlock - gameState.nBackLevel - 1);
     const totalStimuli = gameState.stimuliPerBlock - gameState.nBackLevel;
 
-    // 구간별 타겟 위치 선정
     targetTypes.forEach(type => {
         targetPositions[type] = selectTargetPositions(totalStimuli, targetGoals[type], minTargetInterval, maxTargetInterval, patternPreventionStrength);
         console.log(`generateStimulusSequence() - ${type} 타겟 위치:`, targetPositions[type]);
     });
 
-    // 초기 자극 (타겟 없음)
     for (let i = 0; i < gameState.nBackLevel; i++) {
         const imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices || [], imageTextures.length, recentLimit);
         const panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices || [], panels.length, recentLimit);
@@ -1318,7 +1343,8 @@ function generateStimulusSequence() {
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
             targetType: "initial",
-            isSceneTarget: false, isLocationTarget: false, isSoundTarget: false, isColorTarget: false
+            isSceneTarget: false, isLocationTarget: false, isSoundTarget: false, isColorTarget: false,
+            isNearMiss: false
         });
         updateRecentIndices("scene", imageIndex, recentLimit);
         updateRecentIndices("location", panelIndex, recentLimit);
@@ -1326,12 +1352,13 @@ function generateStimulusSequence() {
         updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    // 타겟 및 논타겟 시퀀스 생성
     const allTargets = [];
     targetTypes.forEach(type => {
         targetPositions[type].forEach(pos => allTargets.push({ pos, type }));
     });
     allTargets.sort((a, b) => a.pos - b.pos);
+
+    const nearMissTypes = ['N-1', 'N+1', '2N'];
 
     for (let i = 0; i < totalStimuli; i++) {
         const absoluteIndex = i + gameState.nBackLevel;
@@ -1344,14 +1371,49 @@ function generateStimulusSequence() {
         let isColorTarget = targetsAtPos.some(t => t.type === 'color');
         let targetType = targetsAtPos.length ? targetsAtPos[0].type : "non-target";
 
-        const imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-        const panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-        const soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
-        const colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
+        let imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
+        let panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
+        let soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
+        let colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
+
+        let isNearMiss = false;
+        if (!isSceneTarget && !isLocationTarget && !isSoundTarget && !isColorTarget) {
+            const previousStimulus = sequence[absoluteIndex - 1];
+            const isPreviousNearMiss = previousStimulus && previousStimulus.isNearMiss;
+            const distanceToNearestTarget = Math.min(
+                ...allTargets.map(t => Math.abs(t.pos - i))
+            );
+            if (!isPreviousNearMiss && distanceToNearestTarget > 1 && Math.random() < gameState.nearMissProbability) {
+                isNearMiss = true;
+                const nearMissType = nearMissTypes[Math.floor(Math.random() * nearMissTypes.length)];
+                console.log(`generateStimulusSequence() - 니얼미스 생성: 위치=${absoluteIndex}, 유형=${nearMissType}, 확률=${gameState.nearMissProbability}`);
+
+                if (nearMissType === 'N-1' && absoluteIndex - 1 >= 0) {
+                    imageIndex = sequence[absoluteIndex - 1].imageIndex;
+                    panelIndex = sequence[absoluteIndex - 1].panelIndex;
+                    soundIndex = sequence[absoluteIndex - 1].soundIndex;
+                    colorIndex = sequence[absoluteIndex - 1].colorIndex;
+                } else if (nearMissType === 'N+1' && absoluteIndex + 1 < gameState.stimuliPerBlock) {
+                    const nextStimulus = generateNextStimulusPreview(absoluteIndex + 1, sequence, allTargets);
+                    imageIndex = nextStimulus.imageIndex;
+                    panelIndex = nextStimulus.panelIndex;
+                    soundIndex = nextStimulus.soundIndex;
+                    colorIndex = nextStimulus.colorIndex;
+                } else if (nearMissType === '2N' && absoluteIndex - 2 * gameState.nBackLevel >= 0) {
+                    imageIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].imageIndex;
+                    panelIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].panelIndex;
+                    soundIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].soundIndex;
+                    colorIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].colorIndex;
+                }
+                nearMissHistory.push({ type: nearMissType, index: absoluteIndex });
+                console.log("generateStimulusSequence() - nearMissHistory에 추가, 현재 길이:", nearMissHistory.length);
+            }
+        }
 
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
-            targetType, isSceneTarget, isLocationTarget, isSoundTarget, isColorTarget
+            targetType, isSceneTarget, isLocationTarget, isSoundTarget, isColorTarget,
+            isNearMiss
         });
 
         updateRecentIndices("scene", imageIndex, recentLimit);
@@ -1360,60 +1422,63 @@ function generateStimulusSequence() {
         updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    console.log("generateStimulusSequence() - 시퀀스 생성 완료: 길이", sequence.length);
+    console.log("generateStimulusSequence() - 시퀀스 생성 완료: 길이=", sequence.length, "니얼미스 개수=", nearMissHistory.length);
+
+    const { patternCounts } = analyzePatterns(sequence);
+    console.log("%c패턴 분석 결과: A-B-A: %d, A-B-A-B: %d", "color: red", patternCounts["A-B-A"], patternCounts["A-B-A-B"]);
+
     return sequence;
 }
 
-function selectTargetPositions(totalStimuli, targetCount, minInterval, maxInterval, strength) {
-    // 디버깅: 함수 호출 시 입력값 확인
-    console.log("selectTargetPositions() - 타겟 위치 선정 시작", {
-        totalStimuli: totalStimuli,
-        targetCount: targetCount,
-        minInterval: minInterval,
-        maxInterval: maxInterval,
-        strength: strength,
-        timestamp: Date.now()
-    });
 
-    const positions = [];
-    // strength에 따라 시도 횟수 조절 (0~10 값을 50~500으로 매핑)
-    const maxAttempts = 50 + (strength * 45); // 최소 50번, 최대 500번 시도
-    let attempts = 0;
 
-    while (positions.length < targetCount && attempts < maxAttempts) {
-        const pos = Math.floor(Math.random() * totalStimuli);
-        const valid = positions.every(p => {
-            const diff = Math.abs(p - pos);
-            return diff >= minInterval && diff <= maxInterval;
-        });
-        if (valid && !positions.includes(pos)) {
-            positions.push(pos);
-        }
-        attempts++;
-    }
+// N+1 미리보기 함수 (안정성 확보)
+function generateNextStimulusPreview(absoluteIndex, sequence, allTargets) {
+    const nBackIndex = absoluteIndex - gameState.nBackLevel;
+    const targetsAtPos = allTargets.filter(t => t.pos === absoluteIndex - gameState.nBackLevel);
+    const recentLimit = gameState.nBackLevel * 2;
 
-    positions.sort((a, b) => a - b);
+    let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
+    let isLocationTarget = targetsAtPos.some(t => t.type === 'location');
+    let isSoundTarget = targetsAtPos.some(t => t.type === 'sound');
+    let isColorTarget = targetsAtPos.some(t => t.type === 'color');
 
-    // 디버깅: 결과 확인
-    console.log("selectTargetPositions() - 타겟 위치 선정 완료", {
-        selectedPositions: positions,
-        attemptsUsed: attempts,
-        maxAttempts: maxAttempts,
-        achievedTargetCount: positions.length,
-        requestedTargetCount: targetCount,
-        timestamp: Date.now()
-    });
+    const imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
+    const panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
+    const soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
+    const colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
 
-    if (positions.length < targetCount) {
-        console.warn("selectTargetPositions() - 목표 타겟 수 미달성", {
-            achieved: positions.length,
-            requested: targetCount
-        });
-    }
-
-    return positions;
+    return { imageIndex, panelIndex, soundIndex, colorIndex };
 }
 
+
+
+
+
+
+
+
+
+
+
+// N+1 미리보기 함수 (안정성 확보)
+function generateNextStimulusPreview(absoluteIndex, sequence, allTargets) {
+    const nBackIndex = absoluteIndex - gameState.nBackLevel;
+    const targetsAtPos = allTargets.filter(t => t.pos === absoluteIndex - gameState.nBackLevel);
+    const recentLimit = gameState.nBackLevel * 2;
+
+    let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
+    let isLocationTarget = targetsAtPos.some(t => t.type === 'location');
+    let isSoundTarget = targetsAtPos.some(t => t.type === 'sound');
+    let isColorTarget = targetsAtPos.some(t => t.type === 'color');
+
+    const imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
+    const panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
+    const soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
+    const colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
+
+    return { imageIndex, panelIndex, soundIndex, colorIndex };
+}
 
 
 
@@ -1502,6 +1567,8 @@ function shuffleArray(array) {
 
 
 // 패턴 분석 함수: 시퀀스의 패턴 유형과 횟수를 계산
+// A-B-A: 동일한 타겟 유형이 한 자극을 사이에 두고 반복되는 경우
+// A-B-A-B: 두 쌍의 타겟 유형이 교차 반복되는 경우
 function analyzePatterns(sequence) {
     const patternCounts = {
         "A-B-A": 0,
@@ -1510,6 +1577,7 @@ function analyzePatterns(sequence) {
 
     const targetTypeSequence = sequence.map(s => s.targetType);
 
+    // A-B-A 패턴 분석
     for (let i = 2; i < targetTypeSequence.length; i++) {
         const last3 = targetTypeSequence.slice(i - 2, i + 1);
         if (last3[0] === last3[2] && last3[0] !== last3[1] && last3[0] !== "non-target" && last3[2] !== "non-target") {
@@ -1517,6 +1585,7 @@ function analyzePatterns(sequence) {
         }
     }
 
+    // A-B-A-B 패턴 분석
     for (let i = 3; i < targetTypeSequence.length; i++) {
         const last4 = targetTypeSequence.slice(i - 3, i + 1);
         if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1] && last4[0] !== "non-target" && last4[2] !== "non-target") {
@@ -1524,11 +1593,14 @@ function analyzePatterns(sequence) {
         }
     }
 
-    // 미친 학자: 빨간색 디버깅 로그 추가
-    console.log(`%canalyzePatterns() - 패턴 분석 결과: A-B-A: ${patternCounts["A-B-A"]}, A-B-A-B: ${patternCounts["A-B-A-B"]}`, 'color: red');
+    // 디버깅: 패턴 분석 결과를 빨간색으로 출력
+    console.log("%c패턴 분석 결과: A-B-A: %d, A-B-A-B: %d", "color: red", patternCounts["A-B-A"], patternCounts["A-B-A-B"]);
     console.log(`analyzePatterns() - 패턴 분석 완료:`, patternCounts);
     return { patternCounts };
 }
+
+
+
 
 function findProblematicPositions(sequence) {
     const problematicPositions = [];
@@ -1567,7 +1639,7 @@ function adjustTargetPositions(sequence, problematicPositions) {
 
 
 function endBlock() {
-    console.log("endBlock() - 블록 종료 시작"); // 디버깅: 함수 시작
+    console.log("endBlock() - 블록 종료 시작");
     gameState.isPlaying = false;
     gameState.isPaused = false;
     gameState.currentBlock++;
@@ -1589,12 +1661,18 @@ function endBlock() {
         errorHistory: gameState.errorHistory
     });
 
+    // 니얼미스 통계 계산
+    const totalNearMisses = nearMissHistory.length;
+    const nearMissResponseRate = totalNearMisses > 0 ? (gameState.nearMissResponses / totalNearMisses) * 100 : 0;
+    console.log(`endBlock() - 니얼미스 통계: 반응 횟수=${gameState.nearMissResponses}, 총 니얼미스=${totalNearMisses}, 비율=${nearMissResponseRate.toFixed(2)}%`);
+
     // DOM 업데이트
     document.getElementById('sceneErrors').textContent = gameState.sceneErrors;
     document.getElementById('locationErrors').textContent = gameState.locationErrors;
     document.getElementById('soundErrors').textContent = gameState.soundErrors;
     document.getElementById('colorErrors').textContent = gameState.colorErrors;
     document.getElementById('resultNLevel').textContent = gameState.nBackLevel;
+    document.getElementById('nearMissStats').textContent = `니얼미스 반응: ${gameState.nearMissResponses}/${totalNearMisses} (${nearMissResponseRate.toFixed(2)}%)`;
 
     // 레벨 조정 로직
     let levelChange = '';
@@ -1608,15 +1686,15 @@ function endBlock() {
             nextNBackLevel = gameState.nBackLevel + 1;
             levelChange = '⬆️ 최고야! 레벨업!!♥️🥰';
             gameState.errorHistory = [];
-            console.log("endBlock() - 레벨업 조건 만족: 두 라운드 연속 4개 이하 또는 한 라운드 3개 이하");
+            console.log("endBlock() - 레벨업 조건 만족");
         } else if ((secondLastErrors !== null && secondLastErrors >= 7 && lastErrors >= 7) || lastErrors >= 9) {
             nextNBackLevel = Math.max(1, gameState.nBackLevel - 1);
             levelChange = '⬇️ 괜찮아! 다시 해보자!😉♥️';
             gameState.errorHistory = [];
-            console.log("endBlock() - 레벨다운 조건 만족: 두 라운드 연속 7개 이상 또는 한 라운드 9개 이상");
+            console.log("endBlock() - 레벨다운 조건 만족");
         } else {
             levelChange = '➡️ 오 좋아! 킵고잉!👏♥️';
-            console.log("endBlock() - 레벨 유지: 조건에 해당 없음");
+            console.log("endBlock() - 레벨 유지");
         }
         gameState.nBackLevel = nextNBackLevel;
     } else {
@@ -1624,22 +1702,14 @@ function endBlock() {
         console.log("endBlock() - 레벨 고정 상태");
     }
 
-    // 게임 계속 버튼 텍스트 및 스타일 변경
     const pressSpaceResult = document.getElementById('pressSpaceResult');
     if (pressSpaceResult) {
         pressSpaceResult.textContent = `다음 라운드 ${gameState.nBackLevel}레벨`;
-        pressSpaceResult.style.fontWeight = 'bold'; // 굵은 글씨
-        pressSpaceResult.style.color = '#000'; // 진한 글씨 (검정색)
-        console.log("endBlock() - 게임 계속 버튼 업데이트:", { // 디버깅: 버튼 변경 확인
-            text: pressSpaceResult.textContent,
-            fontWeight: pressSpaceResult.style.fontWeight,
-            color: pressSpaceResult.style.color
-        });
-    } else {
-        console.error("endBlock() - pressSpaceResult 요소 없음");
+        pressSpaceResult.style.fontWeight = 'bold';
+        pressSpaceResult.style.color = '#000';
+        console.log("endBlock() - 게임 계속 버튼 업데이트:", { text: pressSpaceResult.textContent });
     }
 
-    // UI 업데이트
     document.getElementById('levelChange').textContent = levelChange;
     document.getElementById('nBackLevel').textContent = gameState.nBackLevel;
     localStorage.setItem('nBackLevel', gameState.nBackLevel);
@@ -1647,10 +1717,13 @@ function endBlock() {
     document.getElementById('resultScreen').style.display = 'flex';
     setBackgroundImageToResultScreen();
 
+    // 니얼미스 기록 초기화
+    nearMissHistory = [];
+    gameState.nearMissResponses = 0;
+    console.log("endBlock() - nearMissHistory 및 nearMissResponses 초기화 완료, 길이:", nearMissHistory.length);
+
     console.log("endBlock() - 블록 종료 완료, 다음 N백 레벨:", nextNBackLevel);
 }
-
-
 
 
 
@@ -1902,6 +1975,13 @@ document.getElementById('stimuliPerBlock').value = gameState.stimuliPerBlock;
     document.getElementById('stimulusInterval').value = gameState.stimulusInterval;
 }
 
+
+
+
+
+
+
+
 function applySettings() {
     const newStimulusTypes = [];
     if (document.getElementById('sceneStimulus').checked) newStimulusTypes.push('scene');
@@ -1912,45 +1992,46 @@ function applySettings() {
     if (newStimulusTypes.length < 2 || newStimulusTypes.length > 4) {
         document.getElementById('settingsError').textContent = '자극 유형은 최소 2개, 최대 4개 선택해야 합니다.';
         document.getElementById('settingsError').style.display = 'block';
-        console.log("applySettings() - 유효성 검사 실패: 자극 유형은 2~4개여야 함", {
-            selectedTypes: newStimulusTypes,
-            timestamp: Date.now()
-        });
+        console.log("applySettings() - 오류: 자극 유형 개수 부적합", { selectedTypes: newStimulusTypes });
         return;
     }
 
-    // 기본 설정 적용
     gameState.stimulusTypes = newStimulusTypes;
-    gameState.stimuliPerBlock = parseInt(document.getElementById('stimuliPerBlock').value) || 30;
-    gameState.stimulusDuration = parseInt(document.getElementById('stimulusDuration').value) || 1000;
-    gameState.stimulusInterval = parseInt(document.getElementById('stimulusInterval').value) || 2500;
+    gameState.stimuliPerBlock = Math.min(Math.max(parseInt(document.getElementById('stimuliPerBlock').value) || 30, 10), 100);
+    gameState.stimulusDuration = Math.min(Math.max(parseInt(document.getElementById('stimulusDuration').value) || 1000, 500), 5000);
+    gameState.stimulusInterval = Math.min(Math.max(parseInt(document.getElementById('stimulusInterval').value) || 2500, 1000), 10000);
 
-    // 고급 설정 적용
+    gameState.patternPreventionStrength = Math.min(Math.max(parseInt(document.getElementById('patternPreventionStrength').value) || 5, 0), 10);
+    gameState.minTargetInterval = Math.min(Math.max(parseInt(document.getElementById('minTargetInterval').value) || 2, 1), 20);
+    gameState.maxTargetInterval = Math.min(Math.max(parseInt(document.getElementById('maxTargetInterval').value) || 10, 5), 50);
+    if (gameState.maxTargetInterval < gameState.minTargetInterval) {
+        gameState.maxTargetInterval = gameState.minTargetInterval + 1;
+        console.log("applySettings() - 경고: 최대 간격이 최소 간격보다 작아 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
+    }
+
+    gameState.nearMissProbability = Math.min(Math.max(parseFloat(document.getElementById('nearMissProbability').value) || 0.1, 0), 1);
+
     gameState.imageSourceUrl = document.getElementById('imageSourceUrl').value;
     gameState.resultImageUrl = document.getElementById('resultImageUrl').value;
     gameState.soundSource = document.getElementById('soundSourceSelect').value;
     gameState.soundSourceUrl = document.getElementById('soundSourceUrl').value;
 
-    // 패턴 방지 설정 적용
-    gameState.patternPreventionStrength = parseInt(document.getElementById('patternPreventionStrength').value) || 5;
-    gameState.minTargetInterval = parseInt(document.getElementById('minTargetInterval').value) || 2;
-    gameState.maxTargetInterval = parseInt(document.getElementById('maxTargetInterval').value) || 10;
-
-    // 버튼 설정 적용
     gameState.sceneKey = document.getElementById('sceneKey').value.toUpperCase();
     gameState.locationKey = document.getElementById('locationKey').value.toUpperCase();
     gameState.soundKey = document.getElementById('soundKey').value.toUpperCase();
     gameState.colorKey = document.getElementById('colorKey').value.toUpperCase();
 
     const bgColor = document.getElementById('buttonBgColor').value;
-    const bgOpacity = document.getElementById('buttonBgOpacity').value;
+    const bgOpacity = Math.min(Math.max(parseFloat(document.getElementById('buttonBgOpacity').value) || 0.1, 0), 1);
     const textColor = document.getElementById('buttonTextColor').value;
-    const textOpacity = document.getElementById('buttonTextOpacity').value;
-    const width = document.getElementById('buttonWidth').value;
-    const height = document.getElementById('buttonHeight').value;
+    const textOpacity = Math.min(Math.max(parseFloat(document.getElementById('buttonTextOpacity').value) || 0.0, 0), 1);
+    const width = Math.max(parseInt(document.getElementById('buttonWidth').value) || 80, 20);
+    const height = Math.max(parseInt(document.getElementById('buttonHeight').value) || 80, 20);
+
+    gameState.buttonStyles = { bgColor, bgOpacity, textColor, textOpacity, width, height };
 
     [sceneIndicator, soundIndicator, locationIndicator, colorIndicator].forEach(indicator => {
-        indicator.style.left = null; // 초기화
+        indicator.style.left = null;
         indicator.style.right = null;
         indicator.style.bottom = null;
     });
@@ -1971,7 +2052,6 @@ function applySettings() {
         indicator.style.height = `${height}px`;
     });
 
-    // localStorage에 설정 저장
     localStorage.setItem('stimulusTypes', JSON.stringify(gameState.stimulusTypes));
     localStorage.setItem('stimuliPerBlock', gameState.stimuliPerBlock);
     localStorage.setItem('stimulusDuration', gameState.stimulusDuration);
@@ -1979,6 +2059,7 @@ function applySettings() {
     localStorage.setItem('patternPreventionStrength', gameState.patternPreventionStrength);
     localStorage.setItem('minTargetInterval', gameState.minTargetInterval);
     localStorage.setItem('maxTargetInterval', gameState.maxTargetInterval);
+    localStorage.setItem('nearMissProbability', gameState.nearMissProbability);
     localStorage.setItem('imageSourceUrl', gameState.imageSourceUrl);
     localStorage.setItem('resultImageUrl', gameState.resultImageUrl);
     localStorage.setItem('soundSource', gameState.soundSource);
@@ -1991,32 +2072,26 @@ function applySettings() {
     localStorage.setItem('soundIndicatorPos', JSON.stringify({ left: soundIndicator.style.left, bottom: soundIndicator.style.bottom }));
     localStorage.setItem('locationIndicatorPos', JSON.stringify({ right: locationIndicator.style.right, bottom: locationIndicator.style.bottom }));
     localStorage.setItem('colorIndicatorPos', JSON.stringify({ right: colorIndicator.style.right, bottom: colorIndicator.style.bottom }));
-    localStorage.setItem('buttonStyles', JSON.stringify({
-        bgColor: bgColor,
-        bgOpacity: bgOpacity,
-        textColor: textColor,
-        textOpacity: textOpacity,
-        width: width,
-        height: height
-    }));
+    localStorage.setItem('buttonStyles', JSON.stringify(gameState.buttonStyles));
 
     document.getElementById('settingsError').style.display = 'none';
     loadImageTextures();
 
-    // 디버깅: 설정이 제대로 저장되었는지 확인
-    console.log("applySettings() - 설정 적용 및 저장 완료", {
+    console.log("applySettings() - 설정 저장 완료", {
         stimulusTypes: gameState.stimulusTypes,
         stimuliPerBlock: gameState.stimuliPerBlock,
         stimulusDuration: gameState.stimulusDuration,
         stimulusInterval: gameState.stimulusInterval,
-        interferenceType: gameState.interferenceType,
-        cyclicInterferenceNBackLevel: gameState.cyclicInterferenceNBackLevel,
         patternPreventionStrength: gameState.patternPreventionStrength,
         minTargetInterval: gameState.minTargetInterval,
         maxTargetInterval: gameState.maxTargetInterval,
+        nearMissProbability: gameState.nearMissProbability,
+        buttonStyles: gameState.buttonStyles,
         timestamp: Date.now()
     });
 }
+
+
 
 
 
@@ -2032,35 +2107,39 @@ function hexToRgba(hex, opacity) {
 }
 
 function loadSettings() {
-    // N백 레벨 불러오기
     const savedNBackLevel = localStorage.getItem('nBackLevel');
     if (savedNBackLevel) {
-        gameState.nBackLevel = parseInt(savedNBackLevel);
+        gameState.nBackLevel = Math.min(Math.max(parseInt(savedNBackLevel), 1), 9);
         document.getElementById('nBackLevel').textContent = gameState.nBackLevel;
         document.getElementById('customLevel').value = gameState.nBackLevel;
     }
 
-    // 게임 횟수 및 날짜 불러오기
     const lastGameDate = localStorage.getItem('lastGameDate');
     const today = new Date().toDateString();
     if (lastGameDate !== today) {
         gameState.totalGamesToday = 0;
+        localStorage.setItem('lastGameDate', today);
     } else {
         const savedTotalGames = localStorage.getItem('totalGamesToday');
         gameState.totalGamesToday = savedTotalGames ? parseInt(savedTotalGames) : 0;
     }
     document.getElementById('totalGamesTodayCountValue').textContent = gameState.totalGamesToday;
 
-    // 설정 불러오기 (기본값 제공)
     gameState.stimulusTypes = JSON.parse(localStorage.getItem('stimulusTypes')) || ['scene', 'location'];
-    gameState.stimuliPerBlock = parseInt(localStorage.getItem('stimuliPerBlock')) || 30;
-    gameState.stimulusDuration = parseInt(localStorage.getItem('stimulusDuration')) || 1000;
-    gameState.stimulusInterval = parseInt(localStorage.getItem('stimulusInterval')) || 2500;
+    gameState.stimuliPerBlock = Math.min(Math.max(parseInt(localStorage.getItem('stimuliPerBlock')) || 30, 10), 100);
+    gameState.stimulusDuration = Math.min(Math.max(parseInt(localStorage.getItem('stimulusDuration')) || 1000, 500), 5000);
+    gameState.stimulusInterval = Math.min(Math.max(parseInt(localStorage.getItem('stimulusInterval')) || 2500, 1000), 10000);
 
-    // 패턴 방지 설정 불러오기 추가
-    gameState.patternPreventionStrength = parseInt(localStorage.getItem('patternPreventionStrength')) || 5;
-    gameState.minTargetInterval = parseInt(localStorage.getItem('minTargetInterval')) || 2;
-    gameState.maxTargetInterval = parseInt(localStorage.getItem('maxTargetInterval')) || 10;
+    gameState.patternPreventionStrength = Math.min(Math.max(parseInt(localStorage.getItem('patternPreventionStrength')) || 5, 0), 10);
+    gameState.minTargetInterval = Math.min(Math.max(parseInt(localStorage.getItem('minTargetInterval')) || 2, 1), 20);
+    gameState.maxTargetInterval = Math.min(Math.max(parseInt(localStorage.getItem('maxTargetInterval')) || 10, 5), 50);
+    if (gameState.maxTargetInterval < gameState.minTargetInterval) {
+        gameState.maxTargetInterval = gameState.minTargetInterval + 1;
+        console.log("loadSettings() - 경고: 최대 간격이 최소 간격보다 작아 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
+    }
+
+    gameState.nearMissProbability = Math.min(Math.max(parseFloat(localStorage.getItem('nearMissProbability')) || 0.1, 0), 1);
+
     gameState.imageSourceUrl = localStorage.getItem('imageSourceUrl') || 'images/';
     gameState.resultImageUrl = localStorage.getItem('resultImageUrl') || '';
     gameState.soundSource = localStorage.getItem('soundSource') || 'pianoTones';
@@ -2070,7 +2149,6 @@ function loadSettings() {
     gameState.soundKey = localStorage.getItem('soundKey') || 'L';
     gameState.colorKey = localStorage.getItem('colorKey') || 'K';
 
-    // 인디케이터 위치 불러오기
     const scenePos = JSON.parse(localStorage.getItem('sceneIndicatorPos')) || { left: '30px', bottom: '40px' };
     const soundPos = JSON.parse(localStorage.getItem('soundIndicatorPos')) || { left: '130px', bottom: '40px' };
     const locationPos = JSON.parse(localStorage.getItem('locationIndicatorPos')) || { right: '130px', bottom: '40px' };
@@ -2084,35 +2162,36 @@ function loadSettings() {
     colorIndicator.style.right = colorPos.right;
     colorIndicator.style.bottom = colorPos.bottom;
 
-    // 버튼 스타일 불러오기
-    const buttonStyles = JSON.parse(localStorage.getItem('buttonStyles')) || {
+    gameState.buttonStyles = JSON.parse(localStorage.getItem('buttonStyles')) || {
         bgColor: '#ffffff',
         bgOpacity: 0.1,
         textColor: '#ffffff',
         textOpacity: 0.0,
-        width: '80',
-        height: '80'
+        width: 80,
+        height: 80
     };
     [sceneIndicator, soundIndicator, locationIndicator, colorIndicator].forEach(indicator => {
-        indicator.style.backgroundColor = hexToRgba(buttonStyles.bgColor, buttonStyles.bgOpacity);
-        indicator.style.color = hexToRgba(buttonStyles.textColor, buttonStyles.textOpacity);
-        indicator.style.width = `${buttonStyles.width}px`;
-        indicator.style.height = `${buttonStyles.height}px`;
+        indicator.style.backgroundColor = hexToRgba(gameState.buttonStyles.bgColor, gameState.buttonStyles.bgOpacity);
+        indicator.style.color = hexToRgba(gameState.buttonStyles.textColor, gameState.buttonStyles.textOpacity);
+        indicator.style.width = `${gameState.buttonStyles.width}px`;
+        indicator.style.height = `${gameState.buttonStyles.height}px`;
     });
 
-    // 설정 UI 동기화
     populateSettings();
 
-    // 디버깅: 패턴 방지 설정이 제대로 불러와졌는지 확인
-    console.log("loadSettings() - 저장된 설정 불러오기 완료", {
+    console.log("loadSettings() - 설정 불러오기 완료", {
+        stimulusTypes: gameState.stimulusTypes,
+        stimuliPerBlock: gameState.stimuliPerBlock,
+        stimulusDuration: gameState.stimulusDuration,
+        stimulusInterval: gameState.stimulusInterval,
         patternPreventionStrength: gameState.patternPreventionStrength,
         minTargetInterval: gameState.minTargetInterval,
         maxTargetInterval: gameState.maxTargetInterval,
+        nearMissProbability: gameState.nearMissProbability,
+        buttonStyles: gameState.buttonStyles,
         timestamp: Date.now()
     });
 }
-
-
 
 
 
