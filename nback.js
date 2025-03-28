@@ -1,7 +1,33 @@
  // Web Audio Context Initialization
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+
 let nearMissHistory = []; // 전역 변수: 니얼미스 이벤트(타겟 아닌 자극에 대한 오반응 추적)를 기록하는 배열
+
+
+
+const roomWidth = 5;
+const roomHeight = 3;
+const roomDepth = 5;
+const panelDepth = 0.02;
+
+const panelPositions = [
+    { x: -1.3, y: 1.9, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
+    { x: 1.3, y: 1.9, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
+    { x: -1.3, y: 0.8, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
+    { x: 1.3, y: 0.8, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
+    { x: -roomWidth / 2 + 0.06, y: 1.9, z: -0.5, rotation: [0, Math.PI / 2, 0] },
+    { x: -roomWidth / 2 + 0.06, y: 0.8, z: -0.5, rotation: [0, Math.PI / 2, 0] },
+    { x: roomWidth / 2 - 0.06, y: 1.9, z: -0.5, rotation: [0, -Math.PI / 2, 0] },
+    { x: roomWidth / 2 - 0.06, y: 0.8, z: -0.5, rotation: [0, -Math.PI / 2, 0] },
+    { x: -1.3, y: roomHeight - panelDepth / 2, z: -1.5, rotation: [Math.PI / 2, 0, 0] }, // 천장 1: 천장 면에 평행
+    { x: 1.3, y: roomHeight - panelDepth / 2, z: -1.5, rotation: [Math.PI / 2, 0, 0] }, // 천장 2: 천장 면에 평행
+    { x: -13.3, y: panelDepth / 2, z: -1.5, rotation: [-Math.PI / 2, 0, 0] }, // 바닥 1: 바닥 면에 평행
+    { x: 1.3, y: panelDepth / 2, z: -0, rotation: [-Math.PI / 2, 0, 0] }  // 바닥 2: 바닥 면에 평행
+];
+
+
+
 
 
 // Game State
@@ -82,7 +108,19 @@ nearMissProbability: 0.3, // 니얼미스 발생 확률 (기본 10%)
     isPaused: false, // ⏸️ 일시정지 상태 추가
     isFullscreen: false, // 🖼️ 전체화면 상태 추가
     targetCountGoals: {},
+    useCeilingPanels: false,
+    useFloorPanels: false,
+panelPositionsCustom: panelPositions.map(pos => ({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+rotation: pos.rotation || [0, 0, 0]
+    }))
 };
+
+
+
+
 
 // Fisher-Yates (Knuth) 셔플 알고리즘
 function shuffleArray(array) {
@@ -94,6 +132,9 @@ function shuffleArray(array) {
     console.log("shuffleArray() - Shuffled array:", shuffled);
     return shuffled;
 }
+
+
+
 
 const wallColor = 0x262626;
 const floorColor = 0x393734;
@@ -120,9 +161,6 @@ directionalLight.position.set(0, 1, 0);
 directionalLight.intensity = 0.8;
 scene.add(directionalLight);
 
-const roomWidth = 5;
-const roomHeight = 3;
-const roomDepth = 5;
 
 function createBrickTexture() {
     const canvas = document.createElement('canvas');
@@ -250,7 +288,6 @@ scene.add(ceiling);
 
 const panelWidth = 1.0;
 const panelHeight = 1.0;
-const panelDepth = 0.02;
 
 const panelMaterial = new THREE.MeshStandardMaterial({
     color: panelColor,
@@ -258,36 +295,68 @@ const panelMaterial = new THREE.MeshStandardMaterial({
     metalness: 0.0
 });
 
-const panels = [];
-const panelPositions = [
-    { x: -1.3, y: 1.9, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
-    { x: 1.3, y: 1.9, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
-    { x: -1.3, y: 0.8, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
-    { x: 1.3, y: 0.8, z: -roomDepth / 2 + 0.06, rotation: [0, 0, 0] },
-    { x: -roomWidth / 2 + 0.06, y: 1.9, z: -0.5, rotation: [0, Math.PI / 2, 0] },
-    { x: -roomWidth / 2 + 0.06, y: 0.8, z: -0.5, rotation: [0, Math.PI / 2, 0] },
-    { x: roomWidth / 2 - 0.06, y: 1.9, z: -0.5, rotation: [0, -Math.PI / 2, 0] },
-    { x: roomWidth / 2 - 0.06, y: 0.8, z: -0.5, rotation: [0, -Math.PI / 2, 0] }
-];
 
-panelPositions.forEach((pos, index) => {
-    const panelGroup = new THREE.Group();
-    const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(panelWidth, panelHeight, panelDepth),
-        panelMaterial
-    );
-    panelGroup.add(panel);
-    panelGroup.position.set(pos.x, pos.y, pos.z);
-    panelGroup.rotation.set(pos.rotation[0], pos.rotation[1], pos.rotation[2]);
-    scene.add(panelGroup);
-    panels.push({
-        group: panelGroup,
-        position: index,
-        panel: panel,
-        rotation: pos.rotation,
-        stimulusObject: null
+
+
+const panels = []; // 글로벌 배열 유지
+
+function createPanels() {
+    console.log("createPanels() - 패널 생성 시작, 이전 패널 수:", panels.length); // 디버깅: 시작 로그
+    // 기존 패널 제거
+    panels.forEach(panel => {
+        scene.remove(panel.group);
+        console.log("createPanels() - 기존 패널 제거됨, 위치:", panel.position); // 디버깅: 제거 확인
     });
-});
+    panels.length = 0; // 배열 초기화
+
+    panelPositions.forEach((pos, index) => {
+        const isCeiling = index >= 8 && index < 10; // 천장 패널 (인덱스 8, 9)
+        const isFloor = index >= 10; // 바닥 패널 (인덱스 10, 11)
+        // 천장/바닥 패널 사용 여부에 따라 필터링
+        if ((isCeiling && !gameState.useCeilingPanels) || (isFloor && !gameState.useFloorPanels)) {
+            console.log("createPanels() - 패널 생성 스킵: 인덱스=", index, "천장=", isCeiling, "바닥=", isFloor); // 디버깅: 스킵 로그
+            return;
+        }
+
+        const panelGroup = new THREE.Group();
+        const panel = new THREE.Mesh(
+            new THREE.BoxGeometry(panelWidth, panelHeight, panelDepth),
+            panelMaterial
+        );
+        panelGroup.add(panel);
+
+        // 사용자 정의 위치 적용 (기본값 fallback)
+        const customPos = gameState.panelPositionsCustom[index] || pos;
+        panelGroup.position.set(customPos.x, customPos.y, customPos.z);
+        panelGroup.rotation.set(pos.rotation[0], pos.rotation[1], pos.rotation[2]);
+
+        scene.add(panelGroup);
+        panels.push({
+            group: panelGroup,
+            position: index,
+            panel: panel,
+            rotation: pos.rotation,
+            stimulusObject: null
+        });
+        // 디버깅: 패널 회전값 적용 확인
+        console.log("createPanels() - 패널 생성됨: 인덱스=", index, "위치=", customPos, "회전=", {
+            x: pos.rotation[0] * 180 / Math.PI, // 라디안을 도(degree)로 변환
+            y: pos.rotation[1] * 180 / Math.PI,
+            z: pos.rotation[2] * 180 / Math.PI
+        });
+    });
+
+    console.log("createPanels() - 패널 생성 완료, 총 패널 수:", panels.length); // 디버깅: 완료 로그
+}
+
+// 초기 호출 (기존 정적 초기화 대체)
+createPanels();
+
+
+
+
+
+
 
 const imageLoader = new THREE.TextureLoader();
 const imageTextures = [];
@@ -1041,9 +1110,13 @@ function handleSceneResponse() {
     const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel]; // N백 이전 자극 정보
     const sequenceTarget = gameState.stimulusSequence[gameState.currentStimulus - 1]; // 시퀀스에서 정의된 타겟 정보
 
-    console.log("handleSceneResponse() - 장면 비교: 현재 imageIndex=", currentPresented.imageIndex, "N백 imageIndex=", nBackPresented.imageIndex);
+    // 새롭게 추가된 액자 반영: 장면 자극의 세부 정보 로깅 강화
+    console.log("handleSceneResponse() - 장면 비교: 현재 imageIndex=", currentPresented.imageIndex, "N백 imageIndex=", nBackPresented.imageIndex, "액자 세부 정보:", {
+        currentStimulusDetails: currentPresented, // 현재 자극의 전체 데이터
+        nBackStimulusDetails: nBackPresented     // N백 이전 자극의 전체 데이터
+    });
 
-    const isCorrect = currentPresented.imageIndex === nBackPresented.imageIndex; // 동적 타겟 판정
+    const isCorrect = currentPresented.imageIndex === nBackPresented.imageIndex; // 동적 타겟 판정 (기존 로직 유지)
     console.log("handleSceneResponse() - 타겟 검증:", {
         predefined: gameState.currentIsSceneTarget,
         dynamic: isCorrect,
@@ -1066,6 +1139,8 @@ function handleSceneResponse() {
             console.log("handleSceneResponse() - 장면 오류 (타겟 놓침): sceneErrors=", gameState.sceneErrors, "isCorrect=", isCorrect);
             console.log("%c[분석] 사용자가 타겟 장면 자극에 반응했으나 오답 처리됨 - N백 비교 실패", "color: red");
             console.log("상세: 현재=", currentPresented.imageIndex, "N백=", nBackPresented.imageIndex);
+            // 새 액자 관련: 오류 발생 시 추가 디버깅 정보
+            console.log("액자 오류 분석: 현재 자극=", currentPresented, "N백 자극=", nBackPresented);
         } else {
             console.log("handleSceneResponse() - 장면 정답: isCorrect=", isCorrect);
             console.log("%c[분석] 타겟 장면 자극에 정확히 반응함", "color: green");
@@ -1084,9 +1159,10 @@ function handleSceneResponse() {
     }
 
     console.log("handleSceneResponse() - 처리 완료: sceneResponses=", gameState.sceneResponses, "sceneErrors=", gameState.sceneErrors, "sceneTargetProcessed=", gameState.sceneTargetProcessed);
+
+    // 향후 확장성 주석: 새 액자의 속성 추가를 고려한 예비 공간
+    // 예: if (currentPresented.frameCategory && currentPresented.frameCategory !== nBackPresented.frameCategory) { ... }
 }
-
-
 
 
 
@@ -2062,6 +2138,8 @@ document.getElementById('applySettingsBtn').addEventListener('click', () => {
 
 
 function populateSettings() {
+    console.log("populateSettings() - 설정 UI 반영 시작, 타임스탬프:", Date.now()); // 디버깅: 시작 로그
+
     // 자극 유형 체크박스 초기화
     document.getElementById('sceneStimulus').checked = gameState.stimulusTypes.includes('scene');
     document.getElementById('locationStimulus').checked = gameState.stimulusTypes.includes('location');
@@ -2107,6 +2185,46 @@ function populateSettings() {
     document.getElementById('button4Right').value = parseInt(colorIndicator.style.right) || 20;
     document.getElementById('button4Bottom').value = parseInt(colorIndicator.style.bottom) || 20;
 
+    // 패널 설정 초기화
+    document.getElementById('useCeilingPanels').checked = gameState.useCeilingPanels;
+    document.getElementById('useFloorPanels').checked = gameState.useFloorPanels;
+
+    // 천장 패널 1 (인덱스 8)
+    const ceilingPanel1 = gameState.panelPositionsCustom[8] || panelPositions[8] || { x: 0, y: 0, z: 0, rotation: [0, 0, 0] };
+    document.getElementById('ceilingPanel1X').value = ceilingPanel1.x ?? 0;
+    document.getElementById('ceilingPanel1Y').value = ceilingPanel1.y ?? 0;
+    document.getElementById('ceilingPanel1Z').value = ceilingPanel1.z ?? 0;
+    document.getElementById('ceilingPanel1RotX').value = ((ceilingPanel1.rotation?.[0] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('ceilingPanel1RotY').value = ((ceilingPanel1.rotation?.[1] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('ceilingPanel1RotZ').value = ((ceilingPanel1.rotation?.[2] ?? 0) * 180 / Math.PI).toFixed(1);
+
+    // 천장 패널 2 (인덱스 9)
+    const ceilingPanel2 = gameState.panelPositionsCustom[9] || panelPositions[9] || { x: 0, y: 0, z: 0, rotation: [0, 0, 0] };
+    document.getElementById('ceilingPanel2X').value = ceilingPanel2.x ?? 0;
+    document.getElementById('ceilingPanel2Y').value = ceilingPanel2.y ?? 0;
+    document.getElementById('ceilingPanel2Z').value = ceilingPanel2.z ?? 0;
+    document.getElementById('ceilingPanel2RotX').value = ((ceilingPanel2.rotation?.[0] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('ceilingPanel2RotY').value = ((ceilingPanel2.rotation?.[1] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('ceilingPanel2RotZ').value = ((ceilingPanel2.rotation?.[2] ?? 0) * 180 / Math.PI).toFixed(1);
+
+    // 바닥 패널 1 (인덱스 10)
+    const floorPanel1 = gameState.panelPositionsCustom[10] || panelPositions[10] || { x: 0, y: 0, z: 0, rotation: [0, 0, 0] };
+    document.getElementById('floorPanel1X').value = floorPanel1.x ?? 0;
+    document.getElementById('floorPanel1Y').value = floorPanel1.y ?? 0;
+    document.getElementById('floorPanel1Z').value = floorPanel1.z ?? 0;
+    document.getElementById('floorPanel1RotX').value = ((floorPanel1.rotation?.[0] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('floorPanel1RotY').value = ((floorPanel1.rotation?.[1] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('floorPanel1RotZ').value = ((floorPanel1.rotation?.[2] ?? 0) * 180 / Math.PI).toFixed(1);
+
+    // 바닥 패널 2 (인덱스 11)
+    const floorPanel2 = gameState.panelPositionsCustom[11] || panelPositions[11] || { x: 0, y: 0, z: 0, rotation: [0, 0, 0] };
+    document.getElementById('floorPanel2X').value = floorPanel2.x ?? 0;
+    document.getElementById('floorPanel2Y').value = floorPanel2.y ?? 0;
+    document.getElementById('floorPanel2Z').value = floorPanel2.z ?? 0;
+    document.getElementById('floorPanel2RotX').value = ((floorPanel2.rotation?.[0] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('floorPanel2RotY').value = ((floorPanel2.rotation?.[1] ?? 0) * 180 / Math.PI).toFixed(1);
+    document.getElementById('floorPanel2RotZ').value = ((floorPanel2.rotation?.[2] ?? 0) * 180 / Math.PI).toFixed(1);
+
     // 디버깅: 설정 패널에 반영된 인디케이터 위치 확인
     console.log("populateSettings() - 설정 패널에 인디케이터 위치 반영:", {
         scene: { left: document.getElementById('button1Left').value, bottom: document.getElementById('button1Bottom').value },
@@ -2116,7 +2234,47 @@ function populateSettings() {
         timestamp: Date.now()
     });
 
+    // 디버깅: 패널 설정이 UI에 반영되었는지 확인
+    console.log("populateSettings() - 패널 설정 UI에 반영:", {
+        useCeilingPanels: document.getElementById('useCeilingPanels').checked,
+        useFloorPanels: document.getElementById('useFloorPanels').checked,
+        ceilingPanel1: {
+            x: document.getElementById('ceilingPanel1X').value,
+            y: document.getElementById('ceilingPanel1Y').value,
+            z: document.getElementById('ceilingPanel1Z').value,
+            rotX: document.getElementById('ceilingPanel1RotX').value,
+            rotY: document.getElementById('ceilingPanel1RotY').value,
+            rotZ: document.getElementById('ceilingPanel1RotZ').value
+        },
+        ceilingPanel2: {
+            x: document.getElementById('ceilingPanel2X').value,
+            y: document.getElementById('ceilingPanel2Y').value,
+            z: document.getElementById('ceilingPanel2Z').value,
+            rotX: document.getElementById('ceilingPanel2RotX').value,
+            rotY: document.getElementById('ceilingPanel2RotY').value,
+            rotZ: document.getElementById('ceilingPanel2RotZ').value
+        },
+        floorPanel1: {
+            x: document.getElementById('floorPanel1X').value,
+            y: document.getElementById('floorPanel1Y').value,
+            z: document.getElementById('floorPanel1Z').value,
+            rotX: document.getElementById('floorPanel1RotX').value,
+            rotY: document.getElementById('floorPanel1RotY').value,
+            rotZ: document.getElementById('floorPanel1RotZ').value
+        },
+        floorPanel2: {
+            x: document.getElementById('floorPanel2X').value,
+            y: document.getElementById('floorPanel2Y').value,
+            z: document.getElementById('floorPanel2Z').value,
+            rotX: document.getElementById('floorPanel2RotX').value,
+            rotY: document.getElementById('floorPanel2RotY').value,
+            rotZ: document.getElementById('floorPanel2RotZ').value
+        },
+        timestamp: Date.now()
+    });
+
     // 설정값이 UI에 반영되었는지 로그로 확인
+    console.log("populateSettings() - panelPositionsCustom 상태:", gameState.panelPositionsCustom);
     console.log("populateSettings() - UI에 설정값 반영 완료", { 
         stimulusTypes: gameState.stimulusTypes,
         stimuliPerBlock: gameState.stimuliPerBlock,
@@ -2137,9 +2295,37 @@ function populateSettings() {
         buttonStyles: gameState.buttonStyles,
         timestamp: Date.now()
     });
+
+    // 패널 상태와 설정값 동기화 확인
+    let ceilingPanelsExist = false;
+    let floorPanelsExist = false;
+    panels.forEach(panel => {
+        const index = panel.position;
+        if (index >= 8 && index < 10) ceilingPanelsExist = true;
+        if (index >= 10) floorPanelsExist = true;
+    });
+
+    console.log("populateSettings() - 현재 패널 상태 확인:", {
+        ceilingPanelsExist: ceilingPanelsExist,
+        floorPanelsExist: floorPanelsExist,
+        expectedCeilingPanels: gameState.useCeilingPanels,
+        expectedFloorPanels: gameState.useFloorPanels
+    });
+
+    // 패널 상태와 설정값이 일치하지 않으면 동기화
+    if (ceilingPanelsExist !== gameState.useCeilingPanels || floorPanelsExist !== gameState.useFloorPanels) {
+        console.warn("populateSettings() - 패널 상태와 설정값 불일치, 패널 재생성으로 동기화");
+        createPanels();
+        console.log("populateSettings() - 패널 재생성 완료, 동기화 후 패널 상태:", {
+            ceilingPanelsExist: panels.some(panel => panel.position >= 8 && panel.position < 10),
+            floorPanelsExist: panels.some(panel => panel.position >= 10)
+        });
+    } else {
+        console.log("populateSettings() - 패널 상태와 설정값 일치, 동기화 불필요");
+    }
+
+    console.log("populateSettings() - 설정 UI 반영 및 동기화 완료, 타임스탬프:", Date.now()); // 디버깅: 완료 로그
 }
-
-
 
 
 
@@ -2190,6 +2376,8 @@ function applyIndicatorStyles(indicators, styles) {
 
 
 function applySettings() {
+    console.log("applySettings() - 설정 적용 시작, 타임스탬프:", Date.now()); // 디버깅: 시작 로그
+
     const newStimulusTypes = [];
     if (document.getElementById('sceneStimulus').checked) newStimulusTypes.push('scene');
     if (document.getElementById('locationStimulus').checked) newStimulusTypes.push('location');
@@ -2199,11 +2387,11 @@ function applySettings() {
     if (newStimulusTypes.length < 2 || newStimulusTypes.length > 4) {
         document.getElementById('settingsError').textContent = '자극 유형은 최소 2개, 최대 4개 선택해야 합니다.';
         document.getElementById('settingsError').style.display = 'block';
-        console.log("applySettings() - 오류: 자극 유형 개수 부적합", { selectedTypes: newStimulusTypes });
+        console.log("applySettings() - 오류: 자극 유형 개수 부적합:", newStimulusTypes); // 디버깅: 유형 오류
         return;
     }
 
-    // 입력값을 명시적으로 파싱하고 디버깅 로그 추가
+    // 입력값 파싱 및 유효성 검사
     const rawStimuliPerBlock = parseInt(document.getElementById('stimuliPerBlock').value, 10);
     const rawStimulusDuration = parseInt(document.getElementById('stimulusDuration').value, 10);
     const rawStimulusInterval = parseInt(document.getElementById('stimulusInterval').value, 10);
@@ -2212,12 +2400,11 @@ function applySettings() {
     const rawMaxTargetInterval = parseInt(document.getElementById('maxTargetInterval').value, 10);
     const rawNearMissProbability = parseFloat(document.getElementById('nearMissProbability').value);
 
-    console.log("applySettings() - UI에서 가져온 원시 값:", {
+    console.log("applySettings() - UI에서 가져온 원시 값:", { // 디버깅: 원시 값 확인
         rawStimuliPerBlock, rawStimulusDuration, rawStimulusInterval,
         rawPatternPreventionStrength, rawMinTargetInterval, rawMaxTargetInterval, rawNearMissProbability
     });
 
-    // NaN 체크 및 범위 조정
     gameState.stimulusTypes = newStimulusTypes;
     gameState.stimuliPerBlock = isNaN(rawStimuliPerBlock) ? 30 : Math.min(Math.max(rawStimuliPerBlock, 10), 100);
     gameState.stimulusDuration = isNaN(rawStimulusDuration) ? 1000 : Math.min(Math.max(rawStimulusDuration, 500), 5000);
@@ -2229,10 +2416,10 @@ function applySettings() {
 
     if (gameState.maxTargetInterval < gameState.minTargetInterval) {
         gameState.maxTargetInterval = gameState.minTargetInterval + 1;
-        console.log("applySettings() - 최대 간격 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
+        console.log("applySettings() - 최대 간격 조정됨:", gameState.maxTargetInterval); // 디버깅: 간격 조정
     }
 
-    // 기타 설정 적용
+    // URL 및 키 설정 적용
     gameState.imageSourceUrl = document.getElementById('imageSourceUrl').value || 'images/';
     gameState.resultImageUrl = document.getElementById('resultImageUrl').value || '';
     gameState.soundSource = document.getElementById('soundSourceSelect').value || 'pianoTones';
@@ -2240,7 +2427,7 @@ function applySettings() {
     gameState.sceneKey = document.getElementById('sceneKey').value.toUpperCase() || 'S';
     gameState.locationKey = document.getElementById('locationKey').value.toUpperCase() || 'A';
     gameState.soundKey = document.getElementById('soundKey').value.toUpperCase() || 'L';
-    gameState.colorKey = document.getElementById('colorKey').value.toUpperCase() || 'D';
+    gameState.colorKey = document.getElementById('colorKey').value.toUpperCase() || 'K';
 
     // 버튼 스타일 적용
     const bgColor = document.getElementById('buttonBgColor').value || '#ffffff';
@@ -2251,7 +2438,7 @@ function applySettings() {
     const height = Math.max(parseInt(document.getElementById('buttonHeight').value, 10) || 80, 20);
 
     gameState.buttonStyles = { bgColor, bgOpacity, textColor, textOpacity, width, height };
-    console.log("applySettings() - 버튼 스타일 설정값 저장", { buttonStyles: gameState.buttonStyles });
+    console.log("applySettings() - 버튼 스타일 적용됨:", gameState.buttonStyles); // 디버깅: 버튼 스타일 확인
 
     // 인디케이터 위치 및 스타일 적용
     const indicators = [sceneIndicator, soundIndicator, locationIndicator, colorIndicator];
@@ -2265,37 +2452,164 @@ function applySettings() {
     indicators.forEach((indicator, i) => {
         if (i < 2) {
             indicator.style.left = `${indicatorPositions[i].left}px`;
-            indicator.style.right = ''; // 오른쪽 위치 초기화
+            indicator.style.right = '';
         } else {
             indicator.style.right = `${indicatorPositions[i].right}px`;
-            indicator.style.left = ''; // 왼쪽 위치 초기화
+            indicator.style.left = '';
         }
         indicator.style.bottom = `${indicatorPositions[i].bottom}px`;
-
-        // 디버깅: 인디케이터 위치가 UI에 반영되었는지 확인
-        console.log(`applySettings() - 인디케이터 ${i + 1} 위치 적용:`, {
+        console.log("applySettings() - 인디케이터 위치 적용:", { // 디버깅: 위치 적용 확인
             id: indicator.id,
             left: indicator.style.left,
             right: indicator.style.right,
-            bottom: indicator.style.bottom,
-            timestamp: Date.now()
+            bottom: indicator.style.bottom
         });
     });
 
     applyIndicatorStyles(indicators, gameState.buttonStyles);
 
-    // 인디케이터 위치를 로컬 스토리지에 저장
-    localStorage.setItem('sceneIndicatorPos', JSON.stringify({ left: indicatorPositions[0].left, bottom: indicatorPositions[0].bottom }));
-    localStorage.setItem('soundIndicatorPos', JSON.stringify({ left: indicatorPositions[1].left, bottom: indicatorPositions[1].bottom }));
-    localStorage.setItem('locationIndicatorPos', JSON.stringify({ right: indicatorPositions[2].right, bottom: indicatorPositions[2].bottom }));
-    localStorage.setItem('colorIndicatorPos', JSON.stringify({ right: indicatorPositions[3].right, bottom: indicatorPositions[3].bottom }));
+    // 패널 설정 적용
+    const previousUseCeilingPanels = gameState.useCeilingPanels;
+    const previousUseFloorPanels = gameState.useFloorPanels;
+    gameState.useCeilingPanels = document.getElementById('useCeilingPanels').checked;
+    gameState.useFloorPanels = document.getElementById('useFloorPanels').checked;
 
-    // 디버깅: 저장된 위치 값 확인
-    console.log("applySettings() - 인디케이터 위치 로컬 스토리지 저장 완료:", {
-        scene: JSON.parse(localStorage.getItem('sceneIndicatorPos')),
-        sound: JSON.parse(localStorage.getItem('soundIndicatorPos')),
-        location: JSON.parse(localStorage.getItem('locationIndicatorPos')),
-        color: JSON.parse(localStorage.getItem('colorIndicatorPos')),
+    // 천장과 바닥 패널 위치 및 회전값 적용
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const degToRad = (deg) => deg * Math.PI / 180;
+
+    // 천장 패널 1 (인덱스 8)
+    let ceilingPanel1X = parseFloat(document.getElementById('ceilingPanel1X').value);
+    let ceilingPanel1Y = parseFloat(document.getElementById('ceilingPanel1Y').value);
+    let ceilingPanel1Z = parseFloat(document.getElementById('ceilingPanel1Z').value);
+    let ceilingPanel1RotX = parseFloat(document.getElementById('ceilingPanel1RotX').value);
+    let ceilingPanel1RotY = parseFloat(document.getElementById('ceilingPanel1RotY').value);
+    let ceilingPanel1RotZ = parseFloat(document.getElementById('ceilingPanel1RotZ').value);
+
+    ceilingPanel1X = isNaN(ceilingPanel1X) ? panelPositions[8].x : clamp(ceilingPanel1X, -roomWidth / 2, roomWidth / 2);
+    ceilingPanel1Y = isNaN(ceilingPanel1Y) ? panelPositions[8].y : clamp(ceilingPanel1Y, roomHeight - 1, roomHeight);
+    ceilingPanel1Z = isNaN(ceilingPanel1Z) ? panelPositions[8].z : clamp(ceilingPanel1Z, -roomDepth / 2, roomDepth / 2);
+    ceilingPanel1RotX = isNaN(ceilingPanel1RotX) ? panelPositions[8].rotation[0] * 180 / Math.PI : clamp(ceilingPanel1RotX, -180, 180);
+    ceilingPanel1RotY = isNaN(ceilingPanel1RotY) ? panelPositions[8].rotation[1] * 180 / Math.PI : clamp(ceilingPanel1RotY, -180, 180);
+    ceilingPanel1RotZ = isNaN(ceilingPanel1RotZ) ? panelPositions[8].rotation[2] * 180 / Math.PI : clamp(ceilingPanel1RotZ, -180, 180);
+
+    gameState.panelPositionsCustom[8] = {
+        x: ceilingPanel1X,
+        y: ceilingPanel1Y,
+        z: ceilingPanel1Z,
+        rotation: [degToRad(ceilingPanel1RotX), degToRad(ceilingPanel1RotY), degToRad(ceilingPanel1RotZ)]
+    };
+
+    // 천장 패널 2 (인덱스 9)
+    let ceilingPanel2X = parseFloat(document.getElementById('ceilingPanel2X').value);
+    let ceilingPanel2Y = parseFloat(document.getElementById('ceilingPanel2Y').value);
+    let ceilingPanel2Z = parseFloat(document.getElementById('ceilingPanel2Z').value);
+    let ceilingPanel2RotX = parseFloat(document.getElementById('ceilingPanel2RotX').value);
+    let ceilingPanel2RotY = parseFloat(document.getElementById('ceilingPanel2RotY').value);
+    let ceilingPanel2RotZ = parseFloat(document.getElementById('ceilingPanel2RotZ').value);
+
+    ceilingPanel2X = isNaN(ceilingPanel2X) ? panelPositions[9].x : clamp(ceilingPanel2X, -roomWidth / 2, roomWidth / 2);
+    ceilingPanel2Y = isNaN(ceilingPanel2Y) ? panelPositions[9].y : clamp(ceilingPanel2Y, roomHeight - 1, roomHeight);
+    ceilingPanel2Z = isNaN(ceilingPanel2Z) ? panelPositions[9].z : clamp(ceilingPanel2Z, -roomDepth / 2, roomDepth / 2);
+    ceilingPanel2RotX = isNaN(ceilingPanel2RotX) ? panelPositions[9].rotation[0] * 180 / Math.PI : clamp(ceilingPanel2RotX, -180, 180);
+    ceilingPanel2RotY = isNaN(ceilingPanel2RotY) ? panelPositions[9].rotation[1] * 180 / Math.PI : clamp(ceilingPanel2RotY, -180, 180);
+    ceilingPanel2RotZ = isNaN(ceilingPanel2RotZ) ? panelPositions[9].rotation[2] * 180 / Math.PI : clamp(ceilingPanel2RotZ, -180, 180);
+
+    gameState.panelPositionsCustom[9] = {
+        x: ceilingPanel2X,
+        y: ceilingPanel2Y,
+        z: ceilingPanel2Z,
+        rotation: [degToRad(ceilingPanel2RotX), degToRad(ceilingPanel2RotY), degToRad(ceilingPanel2RotZ)]
+    };
+
+    // 바닥 패널 1 (인덱스 10)
+    let floorPanel1X = parseFloat(document.getElementById('floorPanel1X').value);
+    let floorPanel1Y = parseFloat(document.getElementById('floorPanel1Y').value);
+    let floorPanel1Z = parseFloat(document.getElementById('floorPanel1Z').value);
+    let floorPanel1RotX = parseFloat(document.getElementById('floorPanel1RotX').value);
+    let floorPanel1RotY = parseFloat(document.getElementById('floorPanel1RotY').value);
+    let floorPanel1RotZ = parseFloat(document.getElementById('floorPanel1RotZ').value);
+
+    floorPanel1X = isNaN(floorPanel1X) ? panelPositions[10].x : clamp(floorPanel1X, -roomWidth / 2, roomWidth / 2);
+    floorPanel1Y = isNaN(floorPanel1Y) ? panelPositions[10].y : clamp(floorPanel1Y, 0, 1);
+    floorPanel1Z = isNaN(floorPanel1Z) ? panelPositions[10].z : clamp(floorPanel1Z, -roomDepth / 2, roomDepth / 2);
+    floorPanel1RotX = isNaN(floorPanel1RotX) ? panelPositions[10].rotation[0] * 180 / Math.PI : clamp(floorPanel1RotX, -180, 180);
+    floorPanel1RotY = isNaN(floorPanel1RotY) ? panelPositions[10].rotation[1] * 180 / Math.PI : clamp(floorPanel1RotY, -180, 180);
+    floorPanel1RotZ = isNaN(floorPanel1RotZ) ? panelPositions[10].rotation[2] * 180 / Math.PI : clamp(floorPanel1RotZ, -180, 180);
+
+    gameState.panelPositionsCustom[10] = {
+        x: floorPanel1X,
+        y: floorPanel1Y,
+        z: floorPanel1Z,
+        rotation: [degToRad(floorPanel1RotX), degToRad(floorPanel1RotY), degToRad(floorPanel1RotZ)]
+    };
+
+    // 바닥 패널 2 (인덱스 11)
+    let floorPanel2X = parseFloat(document.getElementById('floorPanel2X').value);
+    let floorPanel2Y = parseFloat(document.getElementById('floorPanel2Y').value);
+    let floorPanel2Z = parseFloat(document.getElementById('floorPanel2Z').value);
+    let floorPanel2RotX = parseFloat(document.getElementById('floorPanel2RotX').value);
+    let floorPanel2RotY = parseFloat(document.getElementById('floorPanel2RotY').value);
+    let floorPanel2RotZ = parseFloat(document.getElementById('floorPanel2RotZ').value);
+
+    floorPanel2X = isNaN(floorPanel2X) ? panelPositions[11].x : clamp(floorPanel2X, -roomWidth / 2, roomWidth / 2);
+    floorPanel2Y = isNaN(floorPanel2Y) ? panelPositions[11].y : clamp(floorPanel2Y, 0, 1);
+    floorPanel2Z = isNaN(floorPanel2Z) ? panelPositions[11].z : clamp(floorPanel2Z, -roomDepth / 2, roomDepth / 2);
+    floorPanel2RotX = isNaN(floorPanel2RotX) ? panelPositions[11].rotation[0] * 180 / Math.PI : clamp(floorPanel2RotX, -180, 180);
+    floorPanel2RotY = isNaN(floorPanel2RotY) ? panelPositions[11].rotation[1] * 180 / Math.PI : clamp(floorPanel2RotY, -180, 180);
+    floorPanel2RotZ = isNaN(floorPanel2RotZ) ? panelPositions[11].rotation[2] * 180 / Math.PI : clamp(floorPanel2RotZ, -180, 180);
+
+    gameState.panelPositionsCustom[11] = {
+        x: floorPanel2X,
+        y: floorPanel2Y,
+        z: floorPanel2Z,
+        rotation: [degToRad(floorPanel2RotX), degToRad(floorPanel2RotY), degToRad(floorPanel2RotZ)]
+    };
+
+    // 패널 상태와 설정값 비교
+    let ceilingPanelsExist = false;
+    let floorPanelsExist = false;
+    panels.forEach(panel => {
+        const index = panel.position;
+        if (index >= 8 && index < 10) ceilingPanelsExist = true;
+        if (index >= 10) floorPanelsExist = true;
+    });
+
+    console.log("applySettings() - 패널 상태와 설정값 비교:", {
+        previousCeilingPanels: previousUseCeilingPanels,
+        previousFloorPanels: previousUseFloorPanels,
+        newCeilingPanels: gameState.useCeilingPanels,
+        newFloorPanels: gameState.useFloorPanels,
+        ceilingPanelsExist: ceilingPanelsExist,
+        floorPanelsExist: floorPanelsExist
+    });
+
+    // 패널 설정이 변경되었거나 현재 패널 상태와 설정값이 일치하지 않으면 패널 재생성
+    const shouldRecreatePanels = 
+        previousUseCeilingPanels !== gameState.useCeilingPanels ||
+        previousUseFloorPanels !== gameState.useFloorPanels ||
+        ceilingPanelsExist !== gameState.useCeilingPanels ||
+        floorPanelsExist !== gameState.useFloorPanels;
+
+    if (shouldRecreatePanels) {
+        console.log("applySettings() - 패널 설정 변경 또는 상태 불일치, 패널 재생성");
+        createPanels();
+        console.log("applySettings() - 패널 재생성 완료, 새로운 패널 상태:", {
+            ceilingPanelsExist: panels.some(panel => panel.position >= 8 && panel.position < 10),
+            floorPanelsExist: panels.some(panel => panel.position >= 10)
+        });
+    } else {
+        console.log("applySettings() - 패널 설정 변경 없음, 재생성 불필요");
+    }
+
+    // 디버깅: 패널 설정 적용 확인
+    console.log("applySettings() - 패널 설정 적용됨:", {
+        useCeilingPanels: gameState.useCeilingPanels,
+        useFloorPanels: gameState.useFloorPanels,
+        ceilingPanel1: gameState.panelPositionsCustom[8],
+        ceilingPanel2: gameState.panelPositionsCustom[9],
+        floorPanel1: gameState.panelPositionsCustom[10],
+        floorPanel2: gameState.panelPositionsCustom[11],
         timestamp: Date.now()
     });
 
@@ -2317,8 +2631,35 @@ function applySettings() {
     localStorage.setItem('soundKey', gameState.soundKey);
     localStorage.setItem('colorKey', gameState.colorKey);
     localStorage.setItem('buttonStyles', JSON.stringify(gameState.buttonStyles));
+    localStorage.setItem('sceneIndicatorPos', JSON.stringify({ left: indicatorPositions[0].left, bottom: indicatorPositions[0].bottom }));
+    localStorage.setItem('soundIndicatorPos', JSON.stringify({ left: indicatorPositions[1].left, bottom: indicatorPositions[1].bottom }));
+    localStorage.setItem('locationIndicatorPos', JSON.stringify({ right: indicatorPositions[2].right, bottom: indicatorPositions[2].bottom }));
+    localStorage.setItem('colorIndicatorPos', JSON.stringify({ right: indicatorPositions[3].right, bottom: indicatorPositions[3].bottom }));
+    localStorage.setItem('useCeilingPanels', gameState.useCeilingPanels);
+    localStorage.setItem('useFloorPanels', gameState.useFloorPanels);
+    localStorage.setItem('panelPositionsCustom', JSON.stringify(gameState.panelPositionsCustom));
 
-    console.log("applySettings() - 설정 적용 및 로컬 스토리지 저장 완료", { ...gameState, timestamp: Date.now() });
+    // 디버깅: 저장된 값 확인
+    console.log("applySettings() - 로컬 스토리지에 저장된 패널 설정:", {
+        useCeilingPanels: localStorage.getItem('useCeilingPanels'),
+        useFloorPanels: localStorage.getItem('useFloorPanels'),
+        panelPositionsCustom: JSON.parse(localStorage.getItem('panelPositionsCustom')),
+        timestamp: Date.now()
+    });
+
+    console.log("applySettings() - 설정 적용 및 저장 완료:", {
+        stimulusTypes: gameState.stimulusTypes,
+        stimuliPerBlock: gameState.stimuliPerBlock,
+        stimulusDuration: gameState.stimulusDuration,
+        stimulusInterval: gameState.stimulusInterval,
+        nearMissProbability: gameState.nearMissProbability,
+        buttonStyles: gameState.buttonStyles,
+        useCeilingPanels: gameState.useCeilingPanels,
+        useFloorPanels: gameState.useFloorPanels,
+        panelPositionsCustom: gameState.panelPositionsCustom,
+        timestamp: Date.now()
+    });
+
     document.getElementById('settingsError').style.display = 'none';
     loadImageTextures();
 }
@@ -2342,54 +2683,153 @@ function hexToRgba(hex, opacity) {
 }
 
 function loadSettings() {
+    console.log("loadSettings() - 설정 로드 시작, 타임스탬프:", Date.now()); // 디버깅: 함수 시작 시간 기록
+
+    // 경고 메시지 요소 초기화
+    const settingsWarning = document.getElementById('loadSettingsWarning');
+    if (settingsWarning) {
+        settingsWarning.style.display = 'none';
+        settingsWarning.textContent = '';
+    } else {
+        console.warn("loadSettings() - 경고 메시지 요소(loadSettingsWarning)가 DOM에 존재하지 않음");
+    }
+
+    // N백 레벨 로드
     const savedNBackLevel = localStorage.getItem('nBackLevel');
     if (savedNBackLevel) {
         gameState.nBackLevel = Math.min(Math.max(parseInt(savedNBackLevel), 1), 9);
         document.getElementById('nBackLevel').textContent = gameState.nBackLevel;
         document.getElementById('customLevel').value = gameState.nBackLevel;
+        console.log("loadSettings() - N백 레벨 로드됨:", gameState.nBackLevel); // 디버깅: 로드된 N백 레벨 확인
+    } else {
+        console.log("loadSettings() - 저장된 N백 레벨 없음, 기본값 사용:", gameState.nBackLevel);
     }
 
+    // 오늘의 게임 횟수 로드 및 날짜 확인
     const lastGameDate = localStorage.getItem('lastGameDate');
     const today = new Date().toDateString();
     if (lastGameDate !== today) {
         gameState.totalGamesToday = 0;
         localStorage.setItem('lastGameDate', today);
+        console.log("loadSettings() - 날짜 변경 감지, 오늘 게임 횟수 초기화:", today); // 디버깅: 날짜 변경으로 초기화
     } else {
         const savedTotalGames = localStorage.getItem('totalGamesToday');
         gameState.totalGamesToday = savedTotalGames ? parseInt(savedTotalGames) : 0;
+        console.log("loadSettings() - 오늘 게임 횟수 로드됨:", gameState.totalGamesToday); // 디버깅: 게임 횟수 로드
     }
     document.getElementById('totalGamesTodayCountValue').textContent = gameState.totalGamesToday;
 
-    // 저장된 값 로드 및 유효성 검사
+    // 자극 유형 로드
     const savedStimulusTypes = JSON.parse(localStorage.getItem('stimulusTypes'));
     gameState.stimulusTypes = (savedStimulusTypes && savedStimulusTypes.length >= 2 && savedStimulusTypes.length <= 4) ? savedStimulusTypes : ['scene', 'location'];
+    console.log("loadSettings() - 자극 유형 로드됨:", gameState.stimulusTypes); // 디버깅: 자극 유형 확인
 
+    // 숫자 설정 로드 및 유효성 검사
     const savedStimuliPerBlock = parseInt(localStorage.getItem('stimuliPerBlock'));
     gameState.stimuliPerBlock = isNaN(savedStimuliPerBlock) ? 30 : Math.min(Math.max(savedStimuliPerBlock, 10), 100);
+    console.log("loadSettings() - 블록당 자극 수 로드됨:", gameState.stimuliPerBlock);
 
     const savedStimulusDuration = parseInt(localStorage.getItem('stimulusDuration'));
     gameState.stimulusDuration = isNaN(savedStimulusDuration) ? 1000 : Math.min(Math.max(savedStimulusDuration, 500), 5000);
+    console.log("loadSettings() - 자극 지속 시간 로드됨:", gameState.stimulusDuration);
 
     const savedStimulusInterval = parseInt(localStorage.getItem('stimulusInterval'));
     gameState.stimulusInterval = isNaN(savedStimulusInterval) ? 2500 : Math.min(Math.max(savedStimulusInterval, 1000), 10000);
+    console.log("loadSettings() - 자극 간격 로드됨:", gameState.stimulusInterval);
 
     const savedPatternPreventionStrength = parseInt(localStorage.getItem('patternPreventionStrength'));
     gameState.patternPreventionStrength = isNaN(savedPatternPreventionStrength) ? 5 : Math.min(Math.max(savedPatternPreventionStrength, 0), 10);
+    console.log("loadSettings() - 패턴 방지 강도 로드됨:", gameState.patternPreventionStrength);
 
     const savedMinTargetInterval = parseInt(localStorage.getItem('minTargetInterval'));
     gameState.minTargetInterval = isNaN(savedMinTargetInterval) ? 2 : Math.min(Math.max(savedMinTargetInterval, 1), 20);
+    console.log("loadSettings() - 최소 타겟 간격 로드됨:", gameState.minTargetInterval);
 
     const savedMaxTargetInterval = parseInt(localStorage.getItem('maxTargetInterval'));
     gameState.maxTargetInterval = isNaN(savedMaxTargetInterval) ? 10 : Math.min(Math.max(savedMaxTargetInterval, 5), 50);
+    console.log("loadSettings() - 최대 타겟 간격 로드됨:", gameState.maxTargetInterval);
 
     const savedNearMissProbability = parseFloat(localStorage.getItem('nearMissProbability'));
-    gameState.nearMissProbability = isNaN(savedNearMissProbability) ? 0.1 : Math.min(Math.max(savedNearMissProbability, 0), 1);
+    gameState.nearMissProbability = isNaN(savedNearMissProbability) ? 0.3 : Math.min(Math.max(savedNearMissProbability, 0), 1);
+    console.log("loadSettings() - 근접 오차 확률 로드됨:", gameState.nearMissProbability);
 
+    // 타겟 간격 유효성 검사
     if (gameState.maxTargetInterval < gameState.minTargetInterval) {
         gameState.maxTargetInterval = gameState.minTargetInterval + 1;
-        console.log("loadSettings() - 경고: 최대 간격이 최소 간격보다 작아 조정됨", { maxTargetInterval: gameState.maxTargetInterval });
+        console.log("loadSettings() - 경고: 최대 타겟 간격이 최소 간격보다 작아 조정됨:", gameState.maxTargetInterval); // 디버깅: 간격 조정
     }
 
+    // 패널 설정 로드 및 유효성 검사 강화
+    const rawUseCeilingPanels = localStorage.getItem('useCeilingPanels');
+    const rawUseFloorPanels = localStorage.getItem('useFloorPanels');
+
+    // 로컬 스토리지에서 로드된 원시 값 디버깅
+    console.log("loadSettings() - 로컬 스토리지에서 로드된 원시 패널 설정 값:", {
+        rawUseCeilingPanels: rawUseCeilingPanels,
+        rawUseFloorPanels: rawUseFloorPanels
+    });
+
+    // 유효성 검사 및 변환
+    gameState.useCeilingPanels = rawUseCeilingPanels === 'true' || rawUseCeilingPanels === true;
+    gameState.useFloorPanels = rawUseFloorPanels === 'true' || rawUseFloorPanels === true;
+
+    // 값이 유효하지 않은 경우 기본값으로 초기화 및 사용자 경고
+    let hasInvalidSettings = false;
+    if (rawUseCeilingPanels !== 'true' && rawUseCeilingPanels !== 'false' && rawUseCeilingPanels !== null) {
+        console.warn("loadSettings() - useCeilingPanels 값이 유효하지 않음, 기본값(false)으로 초기화:", rawUseCeilingPanels);
+        gameState.useCeilingPanels = false;
+        localStorage.setItem('useCeilingPanels', 'false'); // 손상된 값 수정
+        hasInvalidSettings = true;
+    }
+    if (rawUseFloorPanels !== 'true' && rawUseFloorPanels !== 'false' && rawUseFloorPanels !== null) {
+        console.warn("loadSettings() - useFloorPanels 값이 유효하지 않음, 기본값(false)으로 초기화:", rawUseFloorPanels);
+        gameState.useFloorPanels = false;
+        localStorage.setItem('useFloorPanels', 'false'); // 손상된 값 수정
+        hasInvalidSettings = true;
+    }
+
+    // 유효하지 않은 설정이 있을 경우 사용자에게 경고 표시
+    if (hasInvalidSettings && settingsWarning) {
+        settingsWarning.textContent = '일부 설정값이 손상되어 기본값으로 초기화되었습니다.';
+        settingsWarning.style.display = 'block';
+        console.log("loadSettings() - 사용자에게 설정 손상 경고 표시");
+    }
+
+    // 로드된 패널 설정값 확인
+    console.log("loadSettings() - 패널 설정 로드 후 상태:", {
+        useCeilingPanels: gameState.useCeilingPanels,
+        useFloorPanels: gameState.useFloorPanels
+    });
+
+    // panelPositionsCustom 로드 및 유효성 검사
+    gameState.panelPositionsCustom = JSON.parse(localStorage.getItem('panelPositionsCustom')) || panelPositions.map(pos => ({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        rotation: pos.rotation || [0, 0, 0] // 기본값 추가
+    }));
+
+    // panelPositionsCustom 유효성 검사
+    if (!Array.isArray(gameState.panelPositionsCustom) || gameState.panelPositionsCustom.length !== panelPositions.length) {
+        console.warn("loadSettings() - panelPositionsCustom이 유효하지 않음, 기본값으로 초기화");
+        gameState.panelPositionsCustom = panelPositions.map(pos => ({
+            x: pos.x,
+            y: pos.y,
+            z: pos.z,
+            rotation: pos.rotation || [0, 0, 0]
+        }));
+        hasInvalidSettings = true;
+    }
+
+    // 각 객체에 rotation 속성이 있는지 확인
+    gameState.panelPositionsCustom = gameState.panelPositionsCustom.map((pos, index) => ({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        rotation: pos.rotation || panelPositions[index]?.rotation || [0, 0, 0]
+    }));
+
+    // URL 및 키 설정 로드
     gameState.imageSourceUrl = localStorage.getItem('imageSourceUrl') || 'images/';
     gameState.resultImageUrl = localStorage.getItem('resultImageUrl') || '';
     gameState.soundSource = localStorage.getItem('soundSource') || 'pianoTones';
@@ -2398,8 +2838,18 @@ function loadSettings() {
     gameState.locationKey = localStorage.getItem('locationKey') || 'A';
     gameState.soundKey = localStorage.getItem('soundKey') || 'L';
     gameState.colorKey = localStorage.getItem('colorKey') || 'K';
+    console.log("loadSettings() - URL 및 키 설정 로드됨:", {
+        imageSourceUrl: gameState.imageSourceUrl,
+        resultImageUrl: gameState.resultImageUrl,
+        soundSource: gameState.soundSource,
+        soundSourceUrl: gameState.soundSourceUrl,
+        sceneKey: gameState.sceneKey,
+        locationKey: gameState.locationKey,
+        soundKey: gameState.soundKey,
+        colorKey: gameState.colorKey
+    });
 
-    // 저장된 인디케이터 위치 로드 및 적용
+    // 인디케이터 위치 로드 및 적용
     const scenePos = JSON.parse(localStorage.getItem('sceneIndicatorPos')) || { left: 20, bottom: 20 };
     const soundPos = JSON.parse(localStorage.getItem('soundIndicatorPos')) || { left: 120, bottom: 20 };
     const locationPos = JSON.parse(localStorage.getItem('locationIndicatorPos')) || { right: 120, bottom: 20 };
@@ -2407,24 +2857,22 @@ function loadSettings() {
 
     sceneIndicator.style.left = `${scenePos.left}px`;
     sceneIndicator.style.bottom = `${scenePos.bottom}px`;
-    sceneIndicator.style.right = ''; // 초기화
+    sceneIndicator.style.right = '';
     soundIndicator.style.left = `${soundPos.left}px`;
     soundIndicator.style.bottom = `${soundPos.bottom}px`;
-    soundIndicator.style.right = ''; // 초기화
+    soundIndicator.style.right = '';
     locationIndicator.style.right = `${locationPos.right}px`;
     locationIndicator.style.bottom = `${locationPos.bottom}px`;
-    locationIndicator.style.left = ''; // 초기화
+    locationIndicator.style.left = '';
     colorIndicator.style.right = `${colorPos.right}px`;
     colorIndicator.style.bottom = `${colorPos.bottom}px`;
-    colorIndicator.style.left = ''; // 초기화
+    colorIndicator.style.left = '';
 
-    // 디버깅: 로드된 위치 값이 UI에 반영되었는지 확인
-    console.log("loadSettings() - 인디케이터 위치 로드 및 UI 반영:", {
+    console.log("loadSettings() - 인디케이터 위치 로드 및 적용:", { // 디버깅: 위치 적용 확인
         scene: { left: sceneIndicator.style.left, bottom: sceneIndicator.style.bottom },
         sound: { left: soundIndicator.style.left, bottom: soundIndicator.style.bottom },
         location: { right: locationIndicator.style.right, bottom: locationIndicator.style.bottom },
-        color: { right: colorIndicator.style.right, bottom: colorIndicator.style.bottom },
-        timestamp: Date.now()
+        color: { right: colorIndicator.style.right, bottom: colorIndicator.style.bottom }
     });
 
     // 버튼 스타일 로드
@@ -2436,14 +2884,13 @@ function loadSettings() {
         width: 80,
         height: 80
     };
-    console.log("loadSettings() - 로컬 스토리지에서 버튼 스타일 로드", { buttonStyles: gameState.buttonStyles });
+    console.log("loadSettings() - 버튼 스타일 로드됨:", gameState.buttonStyles); // 디버깅: 버튼 스타일 확인
 
     const indicators = [sceneIndicator, soundIndicator, locationIndicator, colorIndicator];
     applyIndicatorStyles(indicators, gameState.buttonStyles);
 
-    populateSettings();
-
-    console.log("loadSettings() - 설정 불러오기 및 UI 반영 완료", {
+    // 최종 로드된 설정값 디버깅
+    console.log("loadSettings() - 모든 설정 로드 완료:", {
         stimulusTypes: gameState.stimulusTypes,
         stimuliPerBlock: gameState.stimuliPerBlock,
         stimulusDuration: gameState.stimulusDuration,
@@ -2452,10 +2899,26 @@ function loadSettings() {
         minTargetInterval: gameState.minTargetInterval,
         maxTargetInterval: gameState.maxTargetInterval,
         nearMissProbability: gameState.nearMissProbability,
-        buttonStyles: gameState.buttonStyles,
+        useCeilingPanels: gameState.useCeilingPanels,
+        useFloorPanels: gameState.useFloorPanels,
+        panelPositionsCustom: gameState.panelPositionsCustom,
         timestamp: Date.now()
     });
+
+    // UI에 설정 반영
+    populateSettings();
+    console.log("loadSettings() - 설정 로드 및 UI 반영 완료, 타임스탬프:", Date.now()); // 디버깅: 함수 종료 시간 기록
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2489,70 +2952,96 @@ document.addEventListener('DOMContentLoaded', () => {
 window.onload = () => {
     console.log("Window fully loaded (including resources) at timestamp:", Date.now());
     loadImageTextures().then(() => {
+        console.log("window.onload - 이미지 로드 완료, 설정 로드 시작");
         loadSettings();
+        console.log("window.onload - 설정 로드 완료, 패널 생성 시작");
+        createPanels(); // 설정 로드 후 패널 생성
+        console.log("window.onload - 패널 생성 완료, 애니메이션 시작");
         animate();
 
-    // 고급 설정 토글 버튼 이벤트 리스너
-    const toggleAdvancedSettingsBtn = document.getElementById('toggleAdvancedSettingsBtn');
-    if (toggleAdvancedSettingsBtn) {
-        toggleAdvancedSettingsBtn.addEventListener('click', () => {
-            const advancedSettings = document.getElementById('advancedSettings');
-            if (advancedSettings) {
-                advancedSettings.style.display = advancedSettings.style.display === 'none' ? 'block' : 'none';
-                console.log("toggleAdvancedSettingsBtn clicked - Advanced settings visibility:", advancedSettings.style.display);
-            } else {
-                console.error("advancedSettings element not found in DOM");
-            }
-        });
-        console.log("toggleAdvancedSettingsBtn event listener added successfully");
-    } else {
-        console.error("toggleAdvancedSettingsBtn not found in DOM at window.onload");
-    }
+        // 고급 설정 토글 버튼 이벤트 리스너
+        const toggleAdvancedSettingsBtn = document.getElementById('toggleAdvancedSettingsBtn');
+        if (toggleAdvancedSettingsBtn) {
+            toggleAdvancedSettingsBtn.addEventListener('click', () => {
+                const advancedSettings = document.getElementById('advancedSettings');
+                if (advancedSettings) {
+                    advancedSettings.style.display = advancedSettings.style.display === 'none' ? 'block' : 'none';
+                    console.log("toggleAdvancedSettingsBtn clicked - Advanced settings visibility:", advancedSettings.style.display);
+                } else {
+                    console.error("advancedSettings element not found in DOM");
+                }
+            });
+            console.log("toggleAdvancedSettingsBtn event listener added successfully");
+        } else {
+            console.error("toggleAdvancedSettingsBtn not found in DOM at window.onload");
+        }
 
-    // 버튼 설정 토글 버튼 이벤트 리스너
-    const toggleButtonSettingsBtn = document.getElementById('toggleButtonSettingsBtn');
-    if (toggleButtonSettingsBtn) {
-        toggleButtonSettingsBtn.addEventListener('click', () => {
-            const buttonSettings = document.getElementById('buttonSettings');
-            if (buttonSettings) {
-                buttonSettings.style.display = buttonSettings.style.display === 'none' ? 'block' : 'none';
-                console.log("toggleButtonSettingsBtn clicked - Button settings visibility:", buttonSettings.style.display);
-            } else {
-                console.error("buttonSettings element not found in DOM");
-            }
-        });
-        console.log("toggleButtonSettingsBtn event listener added successfully");
-    } else {
-        console.error("toggleButtonSettingsBtn not found in DOM at window.onload");
-    }
+        // 버튼 설정 토글 버튼 이벤트 리스너
+        const toggleButtonSettingsBtn = document.getElementById('toggleButtonSettingsBtn');
+        if (toggleButtonSettingsBtn) {
+            toggleButtonSettingsBtn.addEventListener('click', () => {
+                const buttonSettings = document.getElementById('buttonSettings');
+                if (buttonSettings) {
+                    buttonSettings.style.display = buttonSettings.style.display === 'none' ? 'block' : 'none';
+                    console.log("toggleButtonSettingsBtn clicked - Button settings visibility:", buttonSettings.style.display);
+                } else {
+                    console.error("buttonSettings element not found in DOM");
+                }
+            });
+            console.log("toggleButtonSettingsBtn event listener added successfully");
+        } else {
+            console.error("toggleButtonSettingsBtn not found in DOM at window.onload");
+        }
 
-    // 설정 패널 닫기 버튼 이벤트 리스너
-    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-    if (closeSettingsBtn) {
-        closeSettingsBtn.addEventListener('click', () => {
-            const settingsPanel = document.getElementById('settingsPanel');
-            const advancedSettings = document.getElementById('advancedSettings');
-            const buttonSettings = document.getElementById('buttonSettings');
-            if (settingsPanel) {
-                settingsPanel.style.display = 'none';
-                console.log("closeSettingsBtn clicked - Settings panel closed");
-            } else {
-                console.error("settingsPanel not found in DOM");
-            }
-            if (advancedSettings) {
-                advancedSettings.style.display = 'none';
-                console.log("closeSettingsBtn clicked - Advanced settings hidden");
-            }
-            if (buttonSettings) {
-                buttonSettings.style.display = 'none';
-                console.log("closeSettingsBtn clicked - Button settings hidden");
-            }
-        });
-        console.log("closeSettingsBtn event listener added successfully");
-    } else {
-        console.error("closeSettingsBtn not found in DOM at window.onload");
-    }
-}).catch(err => {
+        // 패널 설정 토글 버튼 이벤트 리스너
+        const togglePanelSettingsBtn = document.getElementById('togglePanelSettingsBtn');
+        if (togglePanelSettingsBtn) {
+            togglePanelSettingsBtn.addEventListener('click', () => {
+                const panelSettings = document.getElementById('panelSettings');
+                if (panelSettings) {
+                    panelSettings.style.display = panelSettings.style.display === 'none' ? 'block' : 'none';
+                    console.log("togglePanelSettingsBtn clicked - Panel settings visibility:", panelSettings.style.display);
+                } else {
+                    console.error("panelSettings element not found in DOM");
+                }
+            });
+            console.log("togglePanelSettingsBtn event listener added successfully");
+        } else {
+            console.error("togglePanelSettingsBtn not found in DOM at window.onload");
+        }
+
+        // 설정 패널 닫기 버튼 이벤트 리스너
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        if (closeSettingsBtn) {
+            closeSettingsBtn.addEventListener('click', () => {
+                const settingsPanel = document.getElementById('settingsPanel');
+                const advancedSettings = document.getElementById('advancedSettings');
+                const buttonSettings = document.getElementById('buttonSettings');
+                const panelSettings = document.getElementById('panelSettings');
+                if (settingsPanel) {
+                    settingsPanel.style.display = 'none';
+                    console.log("closeSettingsBtn clicked - Settings panel closed");
+                } else {
+                    console.error("settingsPanel not found in DOM");
+                }
+                if (advancedSettings) {
+                    advancedSettings.style.display = 'none';
+                    console.log("closeSettingsBtn clicked - Advanced settings hidden");
+                }
+                if (buttonSettings) {
+                    buttonSettings.style.display = 'none';
+                    console.log("closeSettingsBtn clicked - Button settings hidden");
+                }
+                if (panelSettings) {
+                    panelSettings.style.display = 'none';
+                    console.log("closeSettingsBtn clicked - Panel settings hidden");
+                }
+            });
+            console.log("closeSettingsBtn event listener added successfully");
+        } else {
+            console.error("closeSettingsBtn not found in DOM at window.onload");
+        }
+    }).catch(err => {
         console.error("window.onload - 이미지 로딩 중 오류 발생:", err);
     });
 };
