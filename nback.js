@@ -1520,6 +1520,7 @@ function generateStimulusSequence() {
         console.log(`generateStimulusSequence() - ${type} 타겟 위치:`, targetPositions[type]);
     });
 
+    // 초기 자극 생성 (N백 레벨만큼)
     for (let i = 0; i < gameState.nBackLevel; i++) {
         const imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices || [], imageTextures.length, recentLimit);
         const panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices || [], panels.length, recentLimit);
@@ -1545,25 +1546,30 @@ function generateStimulusSequence() {
     allTargets.sort((a, b) => a.pos - b.pos);
 
     const nearMissTypes = ['N-1', 'N+1', '2N'];
+    const n = gameState.nBackLevel; // N백 레벨
 
+    // 자극 시퀀스 생성
     for (let i = 0; i < totalStimuli; i++) {
         const absoluteIndex = i + gameState.nBackLevel;
         const nBackIndex = absoluteIndex - gameState.nBackLevel;
         const targetsAtPos = allTargets.filter(t => t.pos === i);
 
+        // 타겟 플래그 설정 (원본 로직 유지)
         let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
         let isLocationTarget = targetsAtPos.some(t => t.type === 'location');
         let isSoundTarget = targetsAtPos.some(t => t.type === 'sound');
         let isColorTarget = targetsAtPos.some(t => t.type === 'color');
         let targetType = targetsAtPos.length ? targetsAtPos[0].type : "non-target";
 
+        // 타겟 생성 로직 (원본 그대로 유지)
         let imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
         let panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
         let soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
         let colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
 
+        // 니얼미스 생성 로직 (수정된 부분)
         let isNearMiss = false;
-        if (!isSceneTarget && !isLocationTarget && !isSoundTarget && !isColorTarget) {
+        if (n > 1 && !isSceneTarget && !isLocationTarget && !isSoundTarget && !isColorTarget) { // N=1일 때 니얼미스 비활성화
             const previousStimulus = sequence[absoluteIndex - 1];
             const isPreviousNearMiss = previousStimulus && previousStimulus.isNearMiss;
             const distanceToNearestTarget = Math.min(
@@ -1572,8 +1578,9 @@ function generateStimulusSequence() {
             if (!isPreviousNearMiss && distanceToNearestTarget > 1 && Math.random() < gameState.nearMissProbability) {
                 isNearMiss = true;
                 const nearMissType = nearMissTypes[Math.floor(Math.random() * nearMissTypes.length)];
-                console.log(`generateStimulusSequence() - 니얼미스 생성: 위치=${absoluteIndex}, 유형=${nearMissType}, 확률=${gameState.nearMissProbability}`);
+                console.log(`generateStimulusSequence() - 니얼미스 생성 시도: 위치=${absoluteIndex}, 유형=${nearMissType}, 확률=${gameState.nearMissProbability}`);
 
+                // 니얼미스 유형에 따른 인덱스 설정
                 if (nearMissType === 'N-1' && absoluteIndex - 1 >= 0) {
                     imageIndex = sequence[absoluteIndex - 1].imageIndex;
                     panelIndex = sequence[absoluteIndex - 1].panelIndex;
@@ -1591,11 +1598,27 @@ function generateStimulusSequence() {
                     soundIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].soundIndex;
                     colorIndex = sequence[absoluteIndex - 2 * gameState.nBackLevel].colorIndex;
                 }
-                nearMissHistory.push({ type: nearMissType, index: absoluteIndex });
-                console.log("generateStimulusSequence() - nearMissHistory에 추가, 현재 길이:", nearMissHistory.length);
+
+                // 니얼미스가 N백 자극과 동일하지 않도록 검증
+                const nBackStimulus = sequence[nBackIndex];
+                const isValidNearMiss = !(
+                    imageIndex === nBackStimulus.imageIndex &&
+                    panelIndex === nBackStimulus.panelIndex &&
+                    soundIndex === nBackStimulus.soundIndex &&
+                    colorIndex === nBackStimulus.colorIndex
+                );
+
+                if (!isValidNearMiss) {
+                    console.log(`%c[경고] 위치 ${absoluteIndex}: 니얼미스가 N백 타겟과 동일하여 생성 취소`, 'color: red');
+                    isNearMiss = false;
+                } else {
+                    nearMissHistory.push({ type: nearMissType, index: absoluteIndex });
+                    console.log(`generateStimulusSequence() - 니얼미스 생성 성공: 위치=${absoluteIndex}, 유형=${nearMissType}, nearMissHistory 길이=${nearMissHistory.length}`);
+                }
             }
         }
 
+        // 시퀀스에 자극 추가
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
             targetType, isSceneTarget, isLocationTarget, isSoundTarget, isColorTarget,
