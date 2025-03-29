@@ -20,10 +20,10 @@ const panelPositions = [
     { x: -roomWidth / 2 + 0.06, y: 0.8, z: -0.5, rotation: [0, Math.PI / 2, 0] },
     { x: roomWidth / 2 - 0.06, y: 1.9, z: -0.5, rotation: [0, -Math.PI / 2, 0] },
     { x: roomWidth / 2 - 0.06, y: 0.8, z: -0.5, rotation: [0, -Math.PI / 2, 0] },
-    { x: -1.3, y: roomHeight - panelDepth / 2, z: -1.5, rotation: [Math.PI / 2, 0, 0] }, // 천장 1: 천장 면에 평행
-    { x: 1.3, y: roomHeight - panelDepth / 2, z: -1.5, rotation: [Math.PI / 2, 0, 0] }, // 천장 2: 천장 면에 평행
-    { x: -13.3, y: panelDepth / 2, z: -1.5, rotation: [-Math.PI / 2, 0, 0] }, // 바닥 1: 바닥 면에 평행
-    { x: 1.3, y: panelDepth / 2, z: -0, rotation: [-Math.PI / 2, 0, 0] }  // 바닥 2: 바닥 면에 평행
+    { x: -1.3, y: roomHeight - panelDepth / 2, z: -0.25, rotation: [Math.PI / 2, 0, 0] }, // 천장 1: 천장 면에 평행
+    { x: 1.3, y: roomHeight - panelDepth / 2, z: -0.25, rotation: [Math.PI / 2, 0, 0] }, // 천장 2: 천장 면에 평행
+    { x: -1.3, y: panelDepth / 2, z: -0.48, rotation: [-Math.PI / 2, 0, 0] }, // 바닥 1: 바닥 면에 평행
+    { x: 1.3, y: panelDepth / 2, z: -0.48, rotation: [-Math.PI / 2, 0, 0] }  // 바닥 2: 바닥 면에 평행
 ];
 
 
@@ -675,7 +675,7 @@ function clearAllSounds() {
 
 function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
     if (gameState.isPaused) return;
-    console.log("showStimulus() - Starting: imageIndex:", imageIndex, "panelIndex:", panelIndex, "soundIndex:", soundIndex, "colorIndex:", colorIndex, "currentStimulus:", gameState.currentStimulus);
+    console.log("showStimulus() - 시작: imageIndex:", imageIndex, "panelIndex:", panelIndex, "soundIndex:", soundIndex, "colorIndex:", colorIndex, "currentStimulus:", gameState.currentStimulus);
     resetIndicators();
     const panel = panels[panelIndex];
 
@@ -685,7 +685,7 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
         gameState.currentIsLocationTarget = gameState.stimulusSequence[gameState.currentStimulus].isLocationTarget;
         gameState.currentIsSoundTarget = gameState.stimulusSequence[gameState.currentStimulus].isSoundTarget;
         gameState.currentIsColorTarget = gameState.stimulusSequence[gameState.currentStimulus].isColorTarget;
-        console.log("showStimulus() - Predefined targets from sequence:", {
+        console.log("showStimulus() - 시퀀스에서 정의된 타겟:", {
             scene: gameState.currentIsSceneTarget,
             location: gameState.currentIsLocationTarget,
             sound: gameState.currentIsSoundTarget,
@@ -696,10 +696,9 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
         gameState.currentIsLocationTarget = false;
         gameState.currentIsSoundTarget = false;
         gameState.currentIsColorTarget = false;
-        console.log("showStimulus() - Initial stimulus, no targets set");
+        console.log("showStimulus() - 초기 자극, 타겟 없음");
     }
 
-    console.log("showStimulus() - Presenting stimulus directly from sequence:", { imageIndex, panelIndex, soundIndex, colorIndex });
 
     // 자극 제시
     createStimulusImage(imageIndex, panel, colorIndex);
@@ -866,38 +865,41 @@ function showStimulus(imageIndex, panelIndex, soundIndex, colorIndex) {
 
 
 
-function selectIndexAvoidingRecent(recentIndices, maxRange, recentLimit) {
+function selectIndexAvoidingRecent(recentIndices, maxRange, recentLimit, maxOccurrences = 5) {
     // 최근 인덱스가 recentLimit을 초과하면 오래된 항목 제거
     while (recentIndices.length >= recentLimit) {
         recentIndices.shift();
     }
 
+    // 현재 시퀀스에서 각 값의 등장 횟수 추적
+    const currentCounts = {};
+    recentIndices.forEach(idx => {
+        currentCounts[idx] = (currentCounts[idx] || 0) + 1;
+    });
+
     // 사용 가능한 인덱스 배열 생성
     const availableIndices = [];
     for (let i = 0; i < maxRange; i++) {
-        if (!recentIndices.includes(i)) {
+        if (!recentIndices.includes(i) && (currentCounts[i] || 0) < maxOccurrences) {
             availableIndices.push(i);
         }
     }
 
-    // 디버깅 로그: 사용 가능한 인덱스 확인
-    console.log("selectIndexAvoidingRecent() - Available indices:", availableIndices, 
-                "Recent indices:", recentIndices, "Max range:", maxRange, "Recent limit:", recentLimit);
+    // 디버깅: 사용 가능한 인덱스와 현재 상태 확인
+    console.log(`selectIndexAvoidingRecent() - 사용 가능한 인덱스: ${availableIndices}, 최근 사용된 인덱스: ${recentIndices}, 최대 범위: ${maxRange}, 제한: ${recentLimit}, 최대 등장 횟수: ${maxOccurrences}`);
 
-    // 사용 가능한 인덱스가 없으면 기본값 반환 (0)
+    // 사용 가능한 인덱스가 없으면 무작위 값 반환
     if (availableIndices.length === 0) {
-        console.warn("selectIndexAvoidingRecent() - No available indices, returning 0");
-        return 0;
+        console.warn(`selectIndexAvoidingRecent() - 사용 가능한 인덱스가 없음, 0부터 ${maxRange - 1} 중 무작위 선택`);
+        return Math.floor(Math.random() * maxRange);
     }
 
     // 무작위로 인덱스 선택
     const selectedIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-    console.log("selectIndexAvoidingRecent() - Selected index:", selectedIndex);
+    console.log(`selectIndexAvoidingRecent() - 선택된 인덱스: ${selectedIndex}`);
 
     return selectedIndex;
 }
-
-
 function updateRecentIndices(type, index, n) {
     const historyKey = `${type}History`;
     const recentKey = `recent${type.charAt(0).toUpperCase() + type.slice(1)}Indices`;
@@ -908,12 +910,11 @@ function updateRecentIndices(type, index, n) {
 
     if (gameState[recentKey].length > maxRecent) {
         const removedIndex = gameState[recentKey].shift();
-        console.log(`updateRecentIndices() - Updated ${type}: Removed old index ${removedIndex}, Added ${index}`);
+        console.log(`updateRecentIndices() - ${type} 업데이트: 제거된 인덱스 ${removedIndex}, 추가된 인덱스 ${index}`);
     } else {
-        console.log(`updateRecentIndices() - Updated ${type}: Added ${index}`);
+        console.log(`updateRecentIndices() - ${type} 업데이트: 추가된 인덱스 ${index}`);
     }
 }
-
 
 function generateNextStimulus() {
     if (!gameState.isPlaying || gameState.isPaused) return;
@@ -1047,44 +1048,66 @@ function toggleFullscreen() {
 
 
  function handleKeyPress(e) {
-  if (gameState.isPaused) return;
-  if (e.key === 'Escape') {
-  	showTitleScreen();
-  	return;
+    if (gameState.isPaused) return;
+    if (e.key === 'Escape') {
+        showTitleScreen();
+        return;
     }
-  if (!gameState.isPlaying) {
-      if (e.code === 'Space') {
-          const resultScreen = document.getElementById('resultScreen');
+    if (!gameState.isPlaying) {
+        if (e.code === 'Space') {
+            const resultScreen = document.getElementById('resultScreen');
             if (resultScreen) {
-                resultScreen.style.display = 'none'; //결과창 숨기기
+                resultScreen.style.display = 'none';
             }
-          startBlock(); // 결과 화면에서도 게임 시작
-      }
-      return;
-  }
-    console.log("handleKeyPress() - Key pressed:", e.key, "timestamp:", Date.now(), "canRespond:", gameState.canRespond, "inResponseWindow:", gameState.inResponseWindow);
+            startBlock();
+        }
+        return;
+    }
+    console.log("handleKeyPress() - 키 입력됨:", e.key, "타임스탬프:", Date.now(), "응답 가능 여부:", gameState.canRespond, "응답 창 여부:", gameState.inResponseWindow);
+
+    // 현재 자극의 타겟 상태 분석
+    const currentSequence = gameState.stimulusSequence[gameState.currentStimulus - 1] || {};
+    console.log(`[분석] 현재 타겟 상태: scene=${currentSequence.isSceneTarget}, location=${currentSequence.isLocationTarget}, sound=${currentSequence.isSoundTarget}, color=${currentSequence.isColorTarget}`);
+
+    // Scene 응답 처리
     if (gameState.stimulusTypes.includes("scene") && e.key.toUpperCase() === gameState.sceneKey && !gameState.sceneTargetProcessed && gameState.canRespond) {
-        console.log("handleKeyPress() - Scene key pressed:", e.key, "calling handleSceneResponse()");
+        if (!currentSequence.isSceneTarget) {
+            console.log("%c[분석] 경고: 'S' 키 입력은 Scene 타겟이 아님. 현재 타겟을 확인하세요.", "color: yellow");
+        }
+        console.log("handleKeyPress() - Scene 키 입력됨:", e.key, "handleSceneResponse() 호출");
         handleSceneResponse();
     }
+    // Location 응답 처리
     if (gameState.stimulusTypes.includes("location") && e.key.toUpperCase() === gameState.locationKey && !gameState.locationTargetProcessed && gameState.canRespond) {
-        console.log("handleKeyPress() - Location key pressed:", e.key, "calling handleLocationResponse()");
+        if (!currentSequence.isLocationTarget) {
+            console.log("%c[분석] 경고: 'A' 키 입력은 Location 타겟이 아님. 현재 타겟을 확인하세요.", "color: yellow");
+        }
+        console.log("handleKeyPress() - Location 키 입력됨:", e.key, "handleLocationResponse() 호출");
         handleLocationResponse();
     }
+    // Sound 응답 처리
     if (gameState.stimulusTypes.includes("sound") && e.key.toUpperCase() === gameState.soundKey && !gameState.soundTargetProcessed && gameState.canRespond) {
-        console.log("handleKeyPress() - Sound key pressed:", e.key, "calling handleSoundResponse()");
+        if (!currentSequence.isSoundTarget) {
+            console.log("%c[분석] 경고: 'L' 키 입력은 Sound 타겟이 아님. 현재 타겟을 확인하세요.", "color: yellow");
+        }
+        console.log("handleKeyPress() - Sound 키 입력됨:", e.key, "handleSoundResponse() 호출");
         handleSoundResponse();
     }
+    // Color 응답 처리
     if (gameState.stimulusTypes.includes("color") && e.key.toUpperCase() === gameState.colorKey && !gameState.colorTargetProcessed && gameState.canRespond) {
-        console.log("handleKeyPress() - Color key pressed:", e.key, "calling handleColorResponse()");
+        if (!currentSequence.isColorTarget) {
+            console.log("%c[분석] 경고: 'K' 키 입력은 Color 타겟이 아님. 현재 타겟을 확인하세요.", "color: yellow");
+        }
+        console.log("handleKeyPress() - Color 키 입력됨:", e.key, "handleColorResponse() 호출");
         handleColorResponse();
     }
 }
 
 
 
+
 function handleSceneResponse() {
-    if (gameState.isPaused) return; // 게임이 일시 정지된 경우 처리 중단
+    if (gameState.isPaused) return;
     console.log("handleSceneResponse() - 처리 시작: canRespondScene=", gameState.canRespondScene, "sceneTargetProcessed=", gameState.sceneTargetProcessed, "currentStimulus=", gameState.currentStimulus);
 
     console.log("handleSceneResponse() - 현재 타겟 상태:", {
@@ -1094,76 +1117,76 @@ function handleSceneResponse() {
 
     if (!gameState.canRespondScene || gameState.sceneTargetProcessed) {
         console.log("handleSceneResponse() - 응답 차단: canRespondScene=", gameState.canRespondScene, "sceneTargetProcessed=", gameState.sceneTargetProcessed);
-        return; // 응답 가능 여부 또는 이미 처리된 경우 중단
+        return;
     }
 
-    gameState.sceneTargetProcessed = true; // 장면 응답 처리 완료 플래그 설정
-    gameState.canRespondScene = false; // 추가 응답 방지
+    gameState.sceneTargetProcessed = true;
+    gameState.canRespondScene = false;
     if (gameState.currentStimulus <= gameState.nBackLevel) {
-        showEarlyResponseFeedback('scene-indicator'); // 조기 응답 피드백 표시
+        showEarlyResponseFeedback('scene-indicator');
         console.log("handleSceneResponse() - 조기 응답: stimulus=", gameState.currentStimulus, "nBackLevel=", gameState.nBackLevel);
-        return; // N백 레벨 이전 자극이면 조기 응답으로 처리
+        return;
     }
 
-    gameState.sceneResponses++; // 장면 응답 횟수 증가
-    const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1]; // 현재 자극 정보
-    const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel]; // N백 이전 자극 정보
-    const sequenceTarget = gameState.stimulusSequence[gameState.currentStimulus - 1]; // 시퀀스에서 정의된 타겟 정보
+    gameState.sceneResponses++;
+    const currentPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1];
+    const nBackPresented = gameState.presentedStimulusHistory[gameState.currentStimulus - 1 - gameState.nBackLevel];
+    const sequenceTarget = gameState.stimulusSequence[gameState.currentStimulus - 1];
 
-    // 새롭게 추가된 액자 반영: 장면 자극의 세부 정보 로깅 강화
-    console.log("handleSceneResponse() - 장면 비교: 현재 imageIndex=", currentPresented.imageIndex, "N백 imageIndex=", nBackPresented.imageIndex, "액자 세부 정보:", {
-        currentStimulusDetails: currentPresented, // 현재 자극의 전체 데이터
-        nBackStimulusDetails: nBackPresented     // N백 이전 자극의 전체 데이터
-    });
+    console.log("handleSceneResponse() - 장면 비교: 현재 imageIndex=", currentPresented.imageIndex, "N백 imageIndex=", nBackPresented.imageIndex);
 
-    const isCorrect = currentPresented.imageIndex === nBackPresented.imageIndex; // 동적 타겟 판정 (기존 로직 유지)
+    const isDynamicMatch = currentPresented.imageIndex === nBackPresented.imageIndex;
+    const isCorrect = gameState.currentIsSceneTarget && isDynamicMatch;
     console.log("handleSceneResponse() - 타겟 검증:", {
         predefined: gameState.currentIsSceneTarget,
-        dynamic: isCorrect,
-        match: gameState.currentIsSceneTarget === isCorrect,
-        sequenceIsTarget: sequenceTarget.isSceneTarget // 시퀀스 타겟 정보 추가
+        dynamic: isDynamicMatch,
+        match: isCorrect,
+        sequenceIsTarget: sequenceTarget.isSceneTarget
     });
 
-    // 타겟 판정 정밀화: 시퀀스 타겟과 현재 타겟 상태 불일치 확인
-    if (gameState.currentIsSceneTarget !== sequenceTarget.isSceneTarget) {
-        console.log("%c[분석] 장면 타겟 상태 불일치: currentIsSceneTarget와 시퀀스 값이 다름", "color: orange");
+    // 분석 로직: 사용자가 이해하기 쉽게 오답 이유 명확화
+    console.log(`[분석] 타겟 여부: 시퀀스 타겟=${sequenceTarget.isSceneTarget}, 현재 타겟 상태=${gameState.currentIsSceneTarget}, 동적 비교=${isDynamicMatch}`);
+    if (gameState.currentIsSceneTarget && !isDynamicMatch) {
+        console.log("%c[분석] 타겟 장면 자극에 반응했으나 N백 비교 실패로 오답 처리됨", "color: red");
+    } else if (!gameState.currentIsSceneTarget && isDynamicMatch) {
+        console.log("%c[분석] 논타겟 장면 자극에 오반응 - 니얼미스 발생", "color: orange");
+    } else if (!gameState.currentIsSceneTarget && !isDynamicMatch) {
+        console.log("[분석] 논타겟 장면 자극에 오반응");
+    } else {
+        console.log("[분석] 타겟 장면 자극에 정확히 반응함");
     }
 
-    showIndicatorFeedback('scene-indicator', gameState.currentIsSceneTarget && isCorrect); // UI 피드백 표시
+    showIndicatorFeedback('scene-indicator', isCorrect);
 
-    // 분석 로직 강화
     if (gameState.currentIsSceneTarget) {
-        if (!isCorrect) {
-            gameState.sceneErrors++; // 오류 카운트 증가
-            gameState.targetMissedErrors.scene++; // 타겟 놓침 오류 증가
-            console.log("handleSceneResponse() - 장면 오류 (타겟 놓침): sceneErrors=", gameState.sceneErrors, "isCorrect=", isCorrect);
-            console.log("%c[분석] 사용자가 타겟 장면 자극에 반응했으나 오답 처리됨 - N백 비교 실패", "color: red");
-            console.log("상세: 현재=", currentPresented.imageIndex, "N백=", nBackPresented.imageIndex);
-            // 새 액자 관련: 오류 발생 시 추가 디버깅 정보
-            console.log("액자 오류 분석: 현재 자극=", currentPresented, "N백 자극=", nBackPresented);
-        } else {
+        if (isCorrect) {
             console.log("handleSceneResponse() - 장면 정답: isCorrect=", isCorrect);
-            console.log("%c[분석] 타겟 장면 자극에 정확히 반응함", "color: green");
+        } else {
+            gameState.sceneErrors++;
+            gameState.targetMissedErrors.scene++;
+            console.log("handleSceneResponse() - 장면 오류 (타겟 놓침): sceneErrors=", gameState.sceneErrors);
         }
     } else {
-        gameState.sceneErrors++; // 오류 카운트 증가
-        gameState.nonTargetFalseResponses.scene++; // 논타겟 오반응 증가
-        console.log("handleSceneResponse() - 장면 오류 (논타겟 오반응): sceneErrors=", gameState.sceneErrors);
-        console.log("%c[분석] 사용자가 타겟이 아닌 장면 자극을 타겟으로 오반응함", "color: red");
-        console.log("상세: 현재=", currentPresented.imageIndex, "N백=", nBackPresented.imageIndex);
-        if (currentPresented.isNearMiss) {
-            gameState.nearMissResponses++; // 니얼미스 반응 카운트 증가
-            console.log("handleSceneResponse() - 니얼미스 반응 감지: nearMissResponses=", gameState.nearMissResponses);
-            console.log("%c[분석] 니얼미스 자극에 반응함 - 혼동 유발 가능성", "color: yellow");
+        if (isDynamicMatch) {
+            gameState.sceneErrors++;
+            gameState.nonTargetFalseResponses.scene++;
+            gameState.nearMissResponses++;
+            nearMissHistory.push({
+                type: 'scene',
+                timestamp: Date.now(),
+                current: currentPresented.imageIndex,
+                nBack: nBackPresented.imageIndex
+            });
+            console.log("handleSceneResponse() - 장면 오류 (니얼미스): sceneErrors=", gameState.sceneErrors, "nearMissResponses=", gameState.nearMissResponses);
+        } else {
+            gameState.sceneErrors++;
+            gameState.nonTargetFalseResponses.scene++;
+            console.log("handleSceneResponse() - 장면 오류 (논타겟 오반응): sceneErrors=", gameState.sceneErrors);
         }
     }
 
     console.log("handleSceneResponse() - 처리 완료: sceneResponses=", gameState.sceneResponses, "sceneErrors=", gameState.sceneErrors, "sceneTargetProcessed=", gameState.sceneTargetProcessed);
-
-    // 향후 확장성 주석: 새 액자의 속성 추가를 고려한 예비 공간
-    // 예: if (currentPresented.frameCategory && currentPresented.frameCategory !== nBackPresented.frameCategory) { ... }
 }
-
 
 
 
@@ -1501,6 +1524,24 @@ function startBlock() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function generateStimulusSequence() {
     console.log("generateStimulusSequence() - 시퀀스 생성 시작: 새로운 패턴방지 및 니얼미스 로직 적용");
     console.log("generateStimulusSequence() - nearMissHistory 초기화 상태 확인, 길이:", nearMissHistory.length);
@@ -1522,10 +1563,10 @@ function generateStimulusSequence() {
 
     // 초기 자극 생성 (N백 레벨만큼)
     for (let i = 0; i < gameState.nBackLevel; i++) {
-        const imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices || [], imageTextures.length, recentLimit);
-        const panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices || [], panels.length, recentLimit);
-        const soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices || [], gameState.pianoTones.length, recentLimit);
-        const colorIndex = selectIndexAvoidingRecent(gameState.recentColorIndices || [], distinctColors.length, recentLimit);
+        const imageIndex = selectIndexAvoidingRecent(gameState.recentSceneIndices || [], imageTextures.length, recentLimit, 5);
+        const panelIndex = selectIndexAvoidingRecent(gameState.recentLocationIndices || [], panels.length, recentLimit, 5);
+        const soundIndex = selectIndexAvoidingRecent(gameState.recentSoundIndices || [], gameState.pianoTones.length, recentLimit, 5);
+        const colorIndex = selectIndexAvoidingRecent(gameState.recentColorIndices || [], distinctColors.length, recentLimit, 5);
 
         sequence.push({
             imageIndex, panelIndex, soundIndex, colorIndex,
@@ -1548,11 +1589,13 @@ function generateStimulusSequence() {
     const nearMissTypes = ['N-1', 'N+1', '2N'];
     const n = gameState.nBackLevel; // N백 레벨
 
+    let consecutiveNonTargets = 0; // 연속된 non-target 자극 수 추적
+
     // 자극 시퀀스 생성
     for (let i = 0; i < totalStimuli; i++) {
         const absoluteIndex = i + gameState.nBackLevel;
         const nBackIndex = absoluteIndex - gameState.nBackLevel;
-        const targetsAtPos = allTargets.filter(t => t.pos === i);
+        const targetsAtPos = allTargets.filter(t => t.pos === absoluteIndex); // 복구: absoluteIndex 사용
 
         // 타겟 플래그 설정 (원본 로직 유지)
         let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
@@ -1561,19 +1604,31 @@ function generateStimulusSequence() {
         let isColorTarget = targetsAtPos.some(t => t.type === 'color');
         let targetType = targetsAtPos.length ? targetsAtPos[0].type : "non-target";
 
-        // 타겟 생성 로직 (원본 그대로 유지)
-        let imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-        let panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-        let soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
-        let colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
+        // 연속된 non-target 자극 제한 (타겟 위치가 아닌 경우에만 적용)
+        if (!targetsAtPos.length && consecutiveNonTargets >= 2) {
+            console.log(`generateStimulusSequence() - 연속 non-target 2회 초과 감지 at ${absoluteIndex}, 강제 타겟 삽입`);
+            const type = targetTypes[Math.floor(Math.random() * targetTypes.length)];
+            if (type === 'scene') isSceneTarget = true;
+            else if (type === 'location') isLocationTarget = true;
+            else if (type === 'sound') isSoundTarget = true;
+            else if (type === 'color') isColorTarget = true;
+            targetType = type;
+            consecutiveNonTargets = 0;
+        }
 
-        // 니얼미스 생성 로직 (수정된 부분)
+        // 타겟 생성 로직 (원본 그대로 유지)
+        let imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit, 5);
+        let panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit, 5);
+        let soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit, 5);
+        let colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit, 5);
+
+        // 니얼미스 생성 로직 (수정된 부분 제외하고 원본 유지)
         let isNearMiss = false;
         if (n > 1 && !isSceneTarget && !isLocationTarget && !isSoundTarget && !isColorTarget) { // N=1일 때 니얼미스 비활성화
             const previousStimulus = sequence[absoluteIndex - 1];
             const isPreviousNearMiss = previousStimulus && previousStimulus.isNearMiss;
             const distanceToNearestTarget = Math.min(
-                ...allTargets.map(t => Math.abs(t.pos - i))
+                ...allTargets.map(t => Math.abs(t.pos - absoluteIndex))
             );
             if (!isPreviousNearMiss && distanceToNearestTarget > 1 && Math.random() < gameState.nearMissProbability) {
                 isNearMiss = true;
@@ -1625,13 +1680,64 @@ function generateStimulusSequence() {
             isNearMiss
         });
 
+        // 연속 non-target 추적
+        if (!isSceneTarget && !isLocationTarget && !isSoundTarget && !isColorTarget) {
+            consecutiveNonTargets++;
+            console.log(`generateStimulusSequence() - non-target 연속 횟수: ${consecutiveNonTargets} at ${absoluteIndex}`);
+        } else {
+            consecutiveNonTargets = 0;
+            console.log(`generateStimulusSequence() - 타겟 삽입으로 non-target 연속 초기화 at ${absoluteIndex}`);
+        }
+
         updateRecentIndices("scene", imageIndex, recentLimit);
         updateRecentIndices("location", panelIndex, recentLimit);
         updateRecentIndices("sound", soundIndex, recentLimit);
         updateRecentIndices("color", colorIndex, recentLimit);
     }
 
-    console.log("generateStimulusSequence() - 시퀀스 생성 완료: 길이=", sequence.length, "니얼미스 개수=", nearMissHistory.length);
+    console.log("generateStimulusSequence() - [분석] 시퀸스 생성 완료: 길이=", sequence.length, "니얼미스 개수=", nearMissHistory.length);
+
+    // 디버깅: 생성된 시퀀스의 상세 정보 출력
+    console.log("%c[시퀀스 생성] 전체 시퀀스 길이: " + sequence.length, "color: blue");
+    console.log("%c[시퀀스 생성] 생성된 시퀀스 내용:", "color: blue", sequence.map((s, idx) => ({
+        index: idx,
+        targetType: s.targetType,
+        imageIndex: s.imageIndex,
+        panelIndex: s.panelIndex,
+        soundIndex: s.soundIndex,
+        colorIndex: s.colorIndex,
+        isSceneTarget: s.isSceneTarget,
+        isLocationTarget: s.isLocationTarget,
+        isSoundTarget: s.isSoundTarget,
+        isColorTarget: s.isColorTarget
+    })));
+
+    // 속성값 빈도 분석
+    const attrCounts = {
+        imageIndex: {},
+        panelIndex: {},
+        soundIndex: {},
+        colorIndex: {}
+    };
+    sequence.forEach(s => {
+        attrCounts.imageIndex[s.imageIndex] = (attrCounts.imageIndex[s.imageIndex] || 0) + 1;
+        attrCounts.panelIndex[s.panelIndex] = (attrCounts.panelIndex[s.panelIndex] || 0) + 1;
+        attrCounts.soundIndex[s.soundIndex] = (attrCounts.soundIndex[s.soundIndex] || 0) + 1;
+        attrCounts.colorIndex[s.colorIndex] = (attrCounts.colorIndex[s.colorIndex] || 0) + 1;
+    });
+
+    console.log("%c[시퀀스 생성] 속성값 빈도 분석:", "color: purple");
+    for (const [attr, counts] of Object.entries(attrCounts)) {
+        const frequent = Object.entries(counts).filter(([_, count]) => count >= 4);
+        console.log(`  ${attr}: `, frequent.length > 0 
+            ? frequent.map(([val, count]) => `${val}=${count}회`).join(", ")
+            : "4회 이상 반복된 값 없음");
+    }
+
+    const patternAnalysisResult = analyzeAllPatterns(sequence);
+    console.log("[분석][패턴] 최종 분석 결과 (전체):", patternAnalysisResult.overallCounts);
+    console.log("[분석][패턴] 최종 분석 결과 (유형별):", patternAnalysisResult.typeCounts);
+    console.log("[분석][패턴] 총 패턴 발생 횟수: " + patternAnalysisResult.totalPatterns);
 
     const { patternCounts } = analyzePatterns(sequence);
     console.log("%c패턴 분석 결과: A-B-A: %d, A-B-A-B: %d", "color: red", patternCounts["A-B-A"], patternCounts["A-B-A-B"]);
@@ -1641,29 +1747,6 @@ function generateStimulusSequence() {
 
 
 
-// N+1 미리보기 함수 (안정성 확보)
-function generateNextStimulusPreview(absoluteIndex, sequence, allTargets) {
-    const nBackIndex = absoluteIndex - gameState.nBackLevel;
-    const targetsAtPos = allTargets.filter(t => t.pos === absoluteIndex - gameState.nBackLevel);
-    const recentLimit = gameState.nBackLevel * 2;
-
-    let isSceneTarget = targetsAtPos.some(t => t.type === 'scene');
-    let isLocationTarget = targetsAtPos.some(t => t.type === 'location');
-    let isSoundTarget = targetsAtPos.some(t => t.type === 'sound');
-    let isColorTarget = targetsAtPos.some(t => t.type === 'color');
-
-    const imageIndex = isSceneTarget ? sequence[nBackIndex].imageIndex : selectIndexAvoidingRecent(gameState.recentSceneIndices, imageTextures.length, recentLimit);
-    const panelIndex = isLocationTarget ? sequence[nBackIndex].panelIndex : selectIndexAvoidingRecent(gameState.recentLocationIndices, panels.length, recentLimit);
-    const soundIndex = isSoundTarget ? sequence[nBackIndex].soundIndex : selectIndexAvoidingRecent(gameState.recentSoundIndices, gameState.pianoTones.length, recentLimit);
-    const colorIndex = isColorTarget ? sequence[nBackIndex].colorIndex : selectIndexAvoidingRecent(gameState.recentColorIndices, distinctColors.length, recentLimit);
-
-    return { imageIndex, panelIndex, soundIndex, colorIndex };
-}
-
-
-
-
-
 
 
 
@@ -1688,6 +1771,13 @@ function generateNextStimulusPreview(absoluteIndex, sequence, allTargets) {
 
     return { imageIndex, panelIndex, soundIndex, colorIndex };
 }
+
+
+
+
+
+
+
 
 
 
@@ -1774,10 +1864,6 @@ function shuffleArray(array) {
 }
 
 
-
-// 패턴 분석 함수: 시퀀스의 패턴 유형과 횟수를 계산
-// A-B-A: 동일한 타겟 유형이 한 자극을 사이에 두고 반복되는 경우
-// A-B-A-B: 두 쌍의 타겟 유형이 교차 반복되는 경우
 function analyzePatterns(sequence) {
     const patternCounts = {
         "A-B-A": 0,
@@ -1811,40 +1897,282 @@ function analyzePatterns(sequence) {
 
 
 
+
+// 패턴 분석 함수: 시퀀스의 패턴 유형과 횟수를 계산
+// A-B-A: 동일한 타겟 유형이 한 자극을 사이에 두고 반복되는 경우
+// A-B-A-B: 두 쌍의 타겟 유형이 교차 반복되는 경우
+// 추가: 속성별 빈도 및 타겟 분포 패턴 분석
+function analyzeAllPatterns(sequence) {
+    // 초기화: 전체 및 각 자극 유형별 패턴 카운트 객체 생성
+    const overallCounts = { "A-A": 0, "A-B-A": 0, "A-B-A-B": 0 };
+    const types = ['scene', 'location', 'sound', 'color'];
+    const typeCounts = {
+        scene: { "A-A": 0, "A-B-A": 0, "A-B-A-B": 0 },
+        location: { "A-A": 0, "A-B-A": 0, "A-B-A-B": 0 },
+        sound: { "A-A": 0, "A-B-A": 0, "A-B-A-B": 0 },
+        color: { "A-A": 0, "A-B-A": 0, "A-B-A-B": 0 }
+    };
+
+    // 속성별 빈도 및 위치 추적 객체
+    const attributeCounts = {
+        imageIndex: {},
+        panelIndex: {},
+        soundIndex: {},
+        colorIndex: {}
+    };
+
+    // 타겟 분포 패턴 카운트 객체
+    const distributionPatterns = {
+        "DoubleTarget": 0, // T-T-N: 연속 타겟 후 논타겟
+        "LateDouble": 0,   // N-N-T-T: 논타겟 연속 후 타겟 쌍
+        "Alternating": 0,  // N-T-N-T: 논타겟과 타겟 교차
+        "TripleNonTarget": 0 // N-N-N-T: 논타겟 3개 후 타겟
+    };
+    const patternPositions = { // 패턴 발생 위치 기록
+        "DoubleTarget": [],
+        "LateDouble": [],
+        "Alternating": [],
+        "TripleNonTarget": []
+    };
+
+    // Helper: 타겟 유효성 판단
+    function isValidTarget(targetType) {
+        return targetType !== "non-target" && targetType !== "initial";
+    }
+
+    // 입력 데이터 점검
+    if (!sequence || sequence.length === 0) {
+        console.log("%c[분석][오류] 시퀀스가 비어있거나 유효하지 않음", "color: red");
+        return { overallCounts, typeCounts, totalPatterns: 0 };
+    }
+    console.log(`%c[분석][입력] 시퀀스 길이: ${sequence.length}, 내용:`, "color: blue", sequence.map(s => ({
+        targetType: s.targetType || "non-target",
+        imageIndex: s.imageIndex,
+        panelIndex: s.panelIndex,
+        soundIndex: s.soundIndex,
+        colorIndex: s.colorIndex
+    })));
+
+    // 전체 시퀀스에 대해 분석
+    const targetTypeSequence = sequence.map(s => s.targetType || "non-target");
+    const len = targetTypeSequence.length;
+
+    // A-A 패턴 분석
+    for (let i = 1; i < len; i++) {
+        const prev = targetTypeSequence[i - 1];
+        const curr = targetTypeSequence[i];
+        if (isValidTarget(prev) && isValidTarget(curr) && prev === curr) {
+            overallCounts["A-A"]++;
+            if (types.includes(curr)) typeCounts[curr]["A-A"]++;
+        }
+    }
+
+    // A-B-A 패턴 분석
+    for (let i = 2; i < len; i++) {
+        const first = targetTypeSequence[i - 2];
+        const middle = targetTypeSequence[i - 1];
+        const last = targetTypeSequence[i];
+        if (isValidTarget(first) && isValidTarget(middle) && isValidTarget(last) &&
+            first === last && first !== middle) {
+            overallCounts["A-B-A"]++;
+            if (types.includes(first)) typeCounts[first]["A-B-A"]++;
+        }
+    }
+
+    // A-B-A-B 패턴 분석
+    for (let i = 3; i < len; i++) {
+        const t0 = targetTypeSequence[i - 3];
+        const t1 = targetTypeSequence[i - 2];
+        const t2 = targetTypeSequence[i - 1];
+        const t3 = targetTypeSequence[i];
+        if (isValidTarget(t0) && isValidTarget(t1) && isValidTarget(t2) && isValidTarget(t3) &&
+            t0 === t2 && t1 === t3 && t0 !== t1) {
+            overallCounts["A-B-A-B"]++;
+            if (types.includes(t0)) typeCounts[t0]["A-B-A-B"]++;
+        }
+    }
+
+    // 속성별 빈도 계산
+    sequence.forEach((stimulus, index) => {
+        ['imageIndex', 'panelIndex', 'soundIndex', 'colorIndex'].forEach(attr => {
+            const value = stimulus[attr] !== undefined ? stimulus[attr] : -1;
+            if (!attributeCounts[attr][value]) {
+                attributeCounts[attr][value] = { count: 0, positions: [] };
+            }
+            attributeCounts[attr][value].count++;
+            attributeCounts[attr][value].positions.push(index);
+        });
+    });
+
+    // 속성별 중간 결과 디버깅
+    console.log("%c[분석][중간] 속성별 빈도 계산 결과:", "color: purple", attributeCounts);
+
+    // 타겟 분포 패턴 분석
+    if (len < 4) {
+        console.log("%c[분석][경고] 시퀀스 길이가 4 미만이라 타겟 분포 패턴 분석 불가", "color: orange");
+    } else {
+        for (let i = 3; i < len; i++) {
+            const t0 = targetTypeSequence[i - 3];
+            const t1 = targetTypeSequence[i - 2];
+            const t2 = targetTypeSequence[i - 1];
+            const t3 = targetTypeSequence[i];
+
+            if (!isValidTarget(t0) && isValidTarget(t1) && !isValidTarget(t2) && isValidTarget(t3)) {
+                distributionPatterns["Alternating"]++;
+                patternPositions["Alternating"].push(i - 3);
+                console.log(`%c[분석][패턴] Alternating 발견: 위치 ${i - 3}, 시퀀스 [${t0},${t1},${t2},${t3}]`, "color: green");
+                continue;
+            }
+
+            if (!isValidTarget(t0) && !isValidTarget(t1) && isValidTarget(t2) && isValidTarget(t3)) {
+                distributionPatterns["LateDouble"]++;
+                patternPositions["LateDouble"].push(i - 3);
+                console.log(`%c[분석][패턴] LateDouble 발견: 위치 ${i - 3}, 시퀀스 [${t0},${t1},${t2},${t3}]`, "color: green");
+                continue;
+            }
+
+            if (!isValidTarget(t0) && !isValidTarget(t1) && !isValidTarget(t2) && isValidTarget(t3)) {
+                distributionPatterns["TripleNonTarget"]++;
+                patternPositions["TripleNonTarget"].push(i - 3);
+                console.log(`%c[분석][패턴] TripleNonTarget 발견: 위치 ${i - 3}, 시퀀스 [${t0},${t1},${t2},${t3}]`, "color: green");
+                continue;
+            }
+
+            if (i - 2 >= 0) {
+                const prev2 = targetTypeSequence[i - 2];
+                const prev1 = targetTypeSequence[i - 1];
+                const curr = targetTypeSequence[i];
+                if (isValidTarget(prev2) && isValidTarget(prev1) && !isValidTarget(curr)) {
+                    distributionPatterns["DoubleTarget"]++;
+                    patternPositions["DoubleTarget"].push(i - 2);
+                    console.log(`%c[분석][패턴] DoubleTarget 발견: 위치 ${i - 2}, 시퀀스 [${prev2},${prev1},${curr}]`, "color: green");
+                }
+            }
+        }
+    }
+
+    // 총합 계산
+    const totalPatterns = overallCounts["A-A"] + overallCounts["A-B-A"] + overallCounts["A-B-A-B"];
+
+    // 기존 로그 출력
+    console.log("%c[분석] 전체 패턴 분석 결과 - A-A: " + overallCounts["A-A"] +
+        ", A-B-A: " + overallCounts["A-B-A"] +
+        ", A-B-A-B: " + overallCounts["A-B-A-B"] +
+        " (총합: " + totalPatterns + ")", "color: blue");
+    types.forEach(type => {
+        const subTotal = typeCounts[type]["A-A"] + typeCounts[type]["A-B-A"] + typeCounts[type]["A-B-A-B"];
+        console.log("%c[분석] " + type + " 패턴 분석 결과 - A-A: " + typeCounts[type]["A-A"] +
+            ", A-B-A: " + typeCounts[type]["A-B-A"] +
+            ", A-B-A-B: " + typeCounts[type]["A-B-A-B"] +
+            " (총합: " + subTotal + ")", "color: green");
+    });
+
+    // 수정: 속성별 빈도 로그 개선 - 중간 점검 및 단순화된 출력
+    ['imageIndex', 'panelIndex', 'soundIndex', 'colorIndex'].forEach(attr => {
+        const allValues = Object.entries(attributeCounts[attr])
+            .map(([value, data]) => ({
+                value,
+                count: data.count,
+                positions: data.positions,
+                avgInterval: data.positions.length > 1
+                    ? (data.positions[data.positions.length - 1] - data.positions[0]) / (data.positions.length - 1)
+                    : 0
+            }))
+            .sort((a, b) => b.count - a.count); // 빈도 내림차순 정렬
+
+        // 주석: 중간 점검 로그 추가
+        console.log(`%c[분석][패턴] ${attr} 빈도 값 계산 완료 - 항목 수: ${allValues.length}`, "color: purple", allValues);
+
+        // 주석: 출력 단순화 - 스타일링 최소화, 한 번에 출력
+        console.log(`[분석][패턴] ${attr} 모든 빈도 값:`);
+        console.log(allValues.map(v => 
+            `  값=${v.value}, 횟수=${v.count}${v.count >= 4 ? ' (빈도 높음)' : ''}, 위치=[${v.positions.join(", ")}], 평균 간격=${v.avgInterval.toFixed(2)}`
+        ).join("\n"));
+    });
+
+    // 수정: 타겟 분포 패턴 로그 개선 - 중간 점검 및 단순화된 출력
+    // 주석: 중간 점검 로그 추가
+    console.log("%c[분석][패턴] 타겟 분포 패턴 계산 완료:", "color: orange", { distributionPatterns, patternPositions });
+
+    // 주석: 출력 단순화 - 스타일링 최소화, 한 번에 출력
+    console.log(`[분석][패턴] 타겟 분포 패턴 분석 결과:`);
+    console.log(Object.entries(distributionPatterns).map(([pattern, count]) => 
+        `  ${pattern}: ${count}회 (위치: ${patternPositions[pattern].join(", ") || "없음"})`
+    ).join("\n"));
+
+    return { overallCounts, typeCounts, totalPatterns };
+}
+
+
+
+
+
+
+
+
+
+
+
 function findProblematicPositions(sequence) {
     const problematicPositions = [];
     const targetTypeSequence = sequence.map(s => s.targetType);
 
+    // A-B-A 패턴에 대한 문제 위치 탐지 (중간 위치)
     for (let i = 2; i < targetTypeSequence.length; i++) {
-        const last3 = targetTypeSequence.slice(i - 2, i + 1);
-        if (last3[0] === last3[2] && last3[0] !== last3[1] && last3[0] !== "non-target") {
+        const first = targetTypeSequence[i - 2];
+        const middle = targetTypeSequence[i - 1];
+        const last = targetTypeSequence[i];
+        if (first === last && first !== middle && first !== "non-target" && first !== "initial") {
             problematicPositions.push(i - 1);
+            console.log("[분석][패턴] A-B-A 패턴 문제 위치 발견: 인덱스 " + (i - 1));
         }
     }
 
+    // A-B-A-B 패턴에 대한 문제 위치 탐지 (두 번째 그룹의 첫 번째 위치)
     for (let i = 3; i < targetTypeSequence.length; i++) {
-        const last4 = targetTypeSequence.slice(i - 3, i + 1);
-        if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1] && last4[0] !== "non-target") {
+        const t0 = targetTypeSequence[i - 3];
+        const t1 = targetTypeSequence[i - 2];
+        const t2 = targetTypeSequence[i - 1];
+        const t3 = targetTypeSequence[i];
+        if (t0 === t2 && t1 === t3 && t0 !== t1 && t0 !== "non-target" && t0 !== "initial") {
             problematicPositions.push(i - 2);
+            console.log("[분석][패턴] A-B-A-B 패턴 문제 위치 발견: 인덱스 " + (i - 2));
         }
     }
 
-    console.log(`findProblematicPositions() - 문제 위치 발견:`, problematicPositions);
-    return [...new Set(problematicPositions)];
+    // 중복 제거 후 반환
+    const uniquePositions = [...new Set(problematicPositions)];
+    console.log("[분석][패턴] 최종 문제점 위치 목록: ", uniquePositions);
+    return uniquePositions;
 }
 
+
+
+
+
+
 function adjustTargetPositions(sequence, problematicPositions) {
+    // 타겟 유형 후보 (타겟 생성 로직과 일치해야 함)
+    const targetTypes = ['scene', 'location', 'sound', 'color'];
     problematicPositions.forEach(pos => {
         const currentType = sequence[pos].targetType;
-        const newTargetType = shuffleArray(targetTypes.filter(t => t !== currentType))[0];
+        // 현재 타겟과 다른 후보 중에서 무작위 선택
+        const newCandidates = targetTypes.filter(t => t !== currentType);
+        const newTargetType = newCandidates[Math.floor(Math.random() * newCandidates.length)];
+        // 변경 전/후 정보를 기록 (디버깅 로그에 "분석"과 "패턴" 포함)
+        console.log("[분석][패턴] adjustTargetPositions() - 위치 " + pos +
+            " 변경: " + currentType + " -> " + newTargetType);
         sequence[pos].targetType = newTargetType;
+        // 각 자극 유형에 따른 플래그 재설정 (필요시 기존 로직과 동일하게 처리)
         sequence[pos].isSceneTarget = newTargetType === 'scene';
         sequence[pos].isLocationTarget = newTargetType === 'location';
         sequence[pos].isSoundTarget = newTargetType === 'sound';
         sequence[pos].isColorTarget = newTargetType === 'color';
-        console.log(`adjustTargetPositions() - 위치 ${pos} 조정: ${currentType} -> ${newTargetType}`);
     });
 }
+
+
+
 
 
 function endBlock() {
