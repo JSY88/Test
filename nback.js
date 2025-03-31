@@ -385,7 +385,7 @@ function loadImageTextures() {
     imageTextures.length = 0;
 
     // 하위 폴더 목록 정의 (사용자가 원하는 폴더명으로 변경 가능)
-    const subFolders = ['folder1', 'folder2', 'folder3'];
+    const subFolders = ['folder2', 'folder3'];
     console.log("loadImageTextures() - 사용 가능한 하위 폴더 목록:", subFolders);
 
     // 랜덤으로 하위 폴더 선택
